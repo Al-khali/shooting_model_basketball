@@ -1,0 +1,16 @@
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Fichiers Python
+*.pyc
+__pycache__/
+
+# Fichiers de données
+/data/raw_data/*
+/data/processed_data/*
+
+# Fichiers d'environnement virtuel
+venv/
+env/
+
