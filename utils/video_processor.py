@@ -1,91 +1,77 @@
 import cv2
-import numpy as np
 
 class VideoProcessor:
-    def __init__(self, frame_height, frame_width, threshold):
+    def __init__(self, model):
         """
-        Initialise le VideoProcessor avec la hauteur et la largeur des images des vidéos, et le seuil pour détecter les mouvements.
+        Initialise le VideoProcessor avec le modèle de machine learning.
 
-        :param frame_height: La hauteur des images des vidéos.
-        :param frame_width: La largeur des images des vidéos.
-        :param threshold: Le seuil pour détecter les mouvements dans les images des vidéos.
+        :param model: Le modèle de machine learning utilisé pour prédire les résultats.
         """
-        self.frame_height = frame_height
-        self.frame_width = frame_width
-        self.threshold = threshold
+        self.model = model
 
-    def process_video(self, video):
+    def process_video(self, video_path):
         """
-        Traite la vidéo pour extraire des informations utiles sur la technique de tir au basketball.
+        Traite la vidéo pour obtenir des conseils sur la technique de tir.
 
-        :param video: La vidéo à traiter.
-        :return: Un dictionnaire contenant des informations sur la technique de tir.
+        :param video_path: Le chemin d'accès à la vidéo.
+        :return: Des conseils pour améliorer la technique de tir.
         """
-        # Prétraitement de la vidéo
-        preprocessed_video = self._preprocess_video(video)
-
-        # Détection des mouvements
-        movement_frames = self._detect_movement(preprocessed_video)
-
-        # Extraction des informations sur la technique de tir
-        shooting_info = self._extract_shooting_info(movement_frames)
-
-        return shooting_info
-
-    def _preprocess_video(self, video):
-        """
-        Prétraite la vidéo pour la détection des mouvements.
-
-        :param video: La vidéo à prétraiter.
-        :return: Un tableau de frames prétraitées.
-        """
+        video = cv2.VideoCapture(video_path)
         frames = []
-        for frame in video:
-            resized_frame = cv2.resize(frame, (self.frame_width, self.frame_height))
-            gray_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
-            frames.append(gray_frame)
-        return np.array(frames)
+        while True:
+            ret, frame = video.read()
+            if not ret:
+                break
+            frames.append(frame)
 
-    def _detect_movement(self, preprocessed_video):
+        preprocessed_frames = self._preprocess_frames(frames)
+        predictions = self.model.predict(preprocessed_frames)
+        tips = self._generate_tips(predictions)
+
+        return tips
+
+   
+    
+    def _preprocess_frames(self, frames):
         """
-        Détecte les mouvements dans la vidéo.
+        Prétraite les images des frames pour l'entrée du modèle.
 
-        :param preprocessed_video: La vidéo prétraitée.
-        :return: Un tableau de frames contenant les mouvements détectés.
+        :param frames: Les images des frames.
+        :return: Les images prétraitées des frames.
         """
-        movement_frames = []
-        for i in range(len(preprocessed_video) - 1):
-            diff = cv2.absdiff(preprocessed_video[i], preprocessed_video[i+1])
-            _, thresh = cv2.threshold(diff, self.threshold, 255, cv2.THRESH_BINARY)
-            movement_frames.append(thresh)
-        return np.array(movement_frames)
+        def preprocess(frame):
+            """
+            Redimensionne l'image de la frame.
 
-    def _extract_shooting_info(self, movement_frames):
+            :param frame: L'image de la frame.
+            :return: L'image prétraitée.
+            """
+            resized_frame = cv2.resize(frame, (224, 224))
+            return resized_frame 
+        
+        
+        preprocessed_frames = []
+        for frame in frames:
+            # Prétraitement spécifique (par exemple, redimensionnement, normalisation, etc.)
+            preprocessed_frame = preprocess(frame)
+            preprocessed_frames.append(preprocessed_frame)
+
+        return preprocessed_frames
+
+    def _generate_tips(self, predictions):
         """
-        Extrait les informations sur la technique de tir à partir des mouvements détectés.
+        Génère des conseils pour améliorer la technique de tir à partir des prédictions du modèle.
 
-        :param movement_frames: Un tableau de frames contenant les mouvements détectés.
-        :return: Un dictionnaire contenant des informations sur la technique de tir.
+        :param predictions: Les prédictions du modèle.
+        :return: Des conseils pour améliorer la technique de tir.
         """
-        shooting_info = {}
+        tips = []
+        for prediction in predictions:
+            if prediction == 0:
+                tips.append("Concentre-toi sur la position de tes pieds pour améliorer ta stabilité.")
+            elif prediction == 1:
+                tips.append("Essaie de lancer plus haut pour améliorer la trajectoire de la balle.")
+            else:
+                tips.append("Travaille ta coordination main-oeil pour améliorer ta précision.")
 
-        # Calcul de la durée du shoot
-        shooting_info['duration'] = len(movement_frames)
-
-        # Calcul du nombre de mouvements pendant le shoot
-        num_movements = 0
-        for frame in movement_frames:
-            num_movements += np.sum(frame > 0)
-        shooting_info['num_movements'] = num_movements
-
-        # Calcul de la position du shoot
-        shooting_info['position'] = self._detect_position(movement_frames)
-
-        return shooting_info
-
-    def _detect_position(self, movement_frames):
-        """
-        Détecte la position du shoot à partir des mouvements détectés.
-
-        :param movement_frames: Un
-
+        return tips
