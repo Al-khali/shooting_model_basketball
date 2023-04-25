@@ -65,3 +65,8 @@ Uploadez la vidéo de votre shoot, le modèle fera l'analyse et vous donnera des
 
 ### Conclusion
 Ce projet montre comment utiliser le machine learning pour améliorer la précision du tir au basketball en analysant les vidéos des joueurs. En structurant le projet en modules et en packages, en utilis
+
+
+### status
+
+ce projet est en cour de developement il n'est pas encore en phase de test la data ainsi l'app sera disponible prochainement 
