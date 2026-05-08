@@ -64,7 +64,7 @@ def make_shot_sequence() -> list[PoseFrame]:
 
     # Jump: hip rises (y decreases in image coords)
     for i in range(5, 10):
-        drop = (i - 4) * 8.0   # moving up: y decreasing
+        drop = (i - 4) * 8.0  # moving up: y decreasing
         frames.append(make_frame(i, hip_y=300.0 - drop, wrist_y=200.0, shoulder_y=160.0))
 
     # Release: apex — hip at lowest y, wrist clearly above shoulder

@@ -63,8 +63,8 @@ def textbook_shot_frame(frame_index: int = 10, ts_ms: float = 333.0) -> PoseFram
         keypoints=[
             # Right arm (shooting arm) — roughly 35° elbow angle
             make_keypoint("right_shoulder", 320, 180),
-            make_keypoint("right_elbow", 340, 240),    # elbow below and right
-            make_keypoint("right_wrist", 330, 160),    # wrist above shoulder
+            make_keypoint("right_elbow", 340, 240),  # elbow below and right
+            make_keypoint("right_wrist", 330, 160),  # wrist above shoulder
             # Left (guide) arm
             make_keypoint("left_shoulder", 280, 180),
             make_keypoint("left_elbow", 260, 240),
@@ -88,7 +88,7 @@ def bad_form_frame(frame_index: int = 10) -> PoseFrame:
         keypoints=[
             # Right arm — exaggerated elbow away from body
             make_keypoint("right_shoulder", 320, 180),
-            make_keypoint("right_elbow", 420, 220),    # elbow flared out → wide angle
+            make_keypoint("right_elbow", 420, 220),  # elbow flared out → wide angle
             make_keypoint("right_wrist", 380, 140),
             make_keypoint("right_hip", 330, 320),
             make_keypoint("right_knee", 330, 390),
@@ -121,7 +121,7 @@ class TestAngleBetweenPoints:
 
     def test_zero_length_vector_returns_none(self) -> None:
         a = Point2D(1, 0)
-        vertex = Point2D(1, 0)   # same as a → zero vector
+        vertex = Point2D(1, 0)  # same as a → zero vector
         b = Point2D(2, 0)
         assert angle_between_points(a, vertex, b) is None
 
@@ -157,20 +157,24 @@ class TestComputeJointAngles:
 
     def test_missing_keypoints_skipped(self) -> None:
         # Frame with only 2 keypoints — cannot form any triangle
-        frame = make_frame(keypoints=[
-            make_keypoint("right_shoulder", 100, 100),
-            make_keypoint("right_elbow", 120, 150),
-            # right_wrist missing
-        ])
+        frame = make_frame(
+            keypoints=[
+                make_keypoint("right_shoulder", 100, 100),
+                make_keypoint("right_elbow", 120, 150),
+                # right_wrist missing
+            ]
+        )
         angles = compute_joint_angles(frame)
         assert not any(a.joint == "right_elbow_angle" for a in angles)
 
     def test_low_confidence_keypoints_excluded(self) -> None:
-        frame = make_frame(keypoints=[
-            make_keypoint("right_shoulder", 320, 180, conf=0.05),  # below threshold
-            make_keypoint("right_elbow", 340, 240, conf=0.9),
-            make_keypoint("right_wrist", 330, 160, conf=0.9),
-        ])
+        frame = make_frame(
+            keypoints=[
+                make_keypoint("right_shoulder", 320, 180, conf=0.05),  # below threshold
+                make_keypoint("right_elbow", 340, 240, conf=0.9),
+                make_keypoint("right_wrist", 330, 160, conf=0.9),
+            ]
+        )
         angles = compute_joint_angles(frame)
         # shoulder has low confidence → below 0.1 threshold in keypoint_map
         assert not any(a.joint == "right_elbow_angle" for a in angles)
@@ -283,31 +287,37 @@ class TestDetectIssues:
 
 class TestComputeAlignmentScore:
     def test_level_shoulders_high_score(self) -> None:
-        frame = make_frame(keypoints=[
-            make_keypoint("left_shoulder", 100, 100),
-            make_keypoint("right_shoulder", 200, 100),   # perfectly level
-            make_keypoint("left_hip", 100, 200),
-            make_keypoint("right_hip", 200, 200),
-        ])
+        frame = make_frame(
+            keypoints=[
+                make_keypoint("left_shoulder", 100, 100),
+                make_keypoint("right_shoulder", 200, 100),  # perfectly level
+                make_keypoint("left_hip", 100, 200),
+                make_keypoint("right_hip", 200, 200),
+            ]
+        )
         score = compute_alignment_score(frame)
         assert score is not None
         assert score > 0.8  # near perfect
 
     def test_tilted_shoulders_lower_score(self) -> None:
-        frame = make_frame(keypoints=[
-            make_keypoint("left_shoulder", 100, 80),
-            make_keypoint("right_shoulder", 200, 130),  # 50px tilt on 100px width
-            make_keypoint("left_hip", 100, 200),
-            make_keypoint("right_hip", 200, 200),
-        ])
+        frame = make_frame(
+            keypoints=[
+                make_keypoint("left_shoulder", 100, 80),
+                make_keypoint("right_shoulder", 200, 130),  # 50px tilt on 100px width
+                make_keypoint("left_hip", 100, 200),
+                make_keypoint("right_hip", 200, 200),
+            ]
+        )
         score = compute_alignment_score(frame)
         assert score is not None
-        level_frame = make_frame(keypoints=[
-            make_keypoint("left_shoulder", 100, 100),
-            make_keypoint("right_shoulder", 200, 100),
-            make_keypoint("left_hip", 100, 200),
-            make_keypoint("right_hip", 200, 200),
-        ])
+        level_frame = make_frame(
+            keypoints=[
+                make_keypoint("left_shoulder", 100, 100),
+                make_keypoint("right_shoulder", 200, 100),
+                make_keypoint("left_hip", 100, 200),
+                make_keypoint("right_hip", 200, 200),
+            ]
+        )
         level_score = compute_alignment_score(level_frame)
         assert score < level_score  # type: ignore[operator]
 

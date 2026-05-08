@@ -45,7 +45,7 @@ class PipelineConfig:
 
     # Frame sampling
     max_frames_to_process: int = 150  # cap to limit inference cost
-    sample_every_n_frames: int = 2    # process 1 frame every N (speed vs accuracy)
+    sample_every_n_frames: int = 2  # process 1 frame every N (speed vs accuracy)
     min_keypoint_confidence: float = CONFIDENCE_THRESHOLD
 
     # Person detection heuristic — skip frames without enough valid keypoints
@@ -251,7 +251,9 @@ class VideoProcessor:
                 continue
 
             # Per-frame confidence = mean of valid keypoints
-            valid_confs = [kp.confidence for kp in keypoints if kp.confidence >= CONFIDENCE_THRESHOLD]
+            valid_confs = [
+                kp.confidence for kp in keypoints if kp.confidence >= CONFIDENCE_THRESHOLD
+            ]
             frame_conf = float(np.mean(valid_confs)) if valid_confs else 0.0
 
             pose_frames.append(

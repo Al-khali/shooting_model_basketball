@@ -36,15 +36,15 @@ CONFIDENCE_THRESHOLD = 0.3  # consistent with perception pipeline
 
 NBA_REFERENCES: dict[str, tuple[float, float]] = {
     # Upper body — shooting form
-    "right_elbow_angle": (30.0, 50.0),   # elbow at release: 30-50° bend
-    "left_elbow_angle": (80.0, 120.0),   # guide hand elbow: looser constraint
+    "right_elbow_angle": (30.0, 50.0),  # elbow at release: 30-50° bend
+    "left_elbow_angle": (80.0, 120.0),  # guide hand elbow: looser constraint
     "right_shoulder_angle": (70.0, 100.0),  # shoulder abduction at release
     # Lower body — power generation
     "right_knee_angle": (150.0, 170.0),  # at release: legs extended (165° ideal)
     "left_knee_angle": (150.0, 170.0),
-    "right_hip_angle": (160.0, 180.0),   # hips extended at release
+    "right_hip_angle": (160.0, 180.0),  # hips extended at release
     # Wrist — follow-through
-    "right_wrist_angle": (30.0, 60.0),   # dorsiflexion (snap) at follow-through
+    "right_wrist_angle": (30.0, 60.0),  # dorsiflexion (snap) at follow-through
 }
 
 
@@ -84,7 +84,11 @@ def keypoint_map(frame: PoseFrame) -> dict[str, Point2D]:
     Only includes keypoints above CONFIDENCE_THRESHOLD (0.3) to avoid
     propagating noisy detections into angle calculations.
     """
-    return {kp.name: Point2D(kp.x, kp.y) for kp in frame.keypoints if kp.confidence >= CONFIDENCE_THRESHOLD}
+    return {
+        kp.name: Point2D(kp.x, kp.y)
+        for kp in frame.keypoints
+        if kp.confidence >= CONFIDENCE_THRESHOLD
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +255,9 @@ def detect_issues(angles: list[JointAngle], timing: ShotTimingMetrics) -> list[s
                 else ""
             )
             direction = (
-                "too low" if angle.optimal_min and angle.value_deg < angle.optimal_min else "too high"
+                "too low"
+                if angle.optimal_min and angle.value_deg < angle.optimal_min
+                else "too high"
             )
             issues.append(
                 f"{angle.joint.replace('_', ' ')} is {direction} "

@@ -244,9 +244,7 @@ def _fill_missing(values: list[float | None]) -> list[float]:
         result[i] = result[first_valid]
 
     # Backward fill end
-    last_valid = n - 1 - next(
-        (i for i, v in enumerate(reversed(result)) if v is not None), 0
-    )
+    last_valid = n - 1 - next((i for i, v in enumerate(reversed(result)) if v is not None), 0)
     for i in range(last_valid + 1, n):
         result[i] = result[last_valid]
 

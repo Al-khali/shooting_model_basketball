@@ -101,8 +101,8 @@ def benchmark_estimator(
     # Warmup
     logger.info("Warming up %s...", estimator.model_name())
     for frame in frames[:warmup_frames]:
-            with contextlib.suppress(Exception):
-                estimator.estimate(frame)
+        with contextlib.suppress(Exception):
+            estimator.estimate(frame)
 
     logger.info("Benchmarking %s on %d frames...", estimator.model_name(), len(frames))
 
@@ -187,7 +187,7 @@ def generate_synthetic_frames(
     for i in range(n):
         frame = np.zeros((height, width, 3), dtype=np.uint8)
         # Simulate a court (green floor)
-        frame[height // 2:, :] = (34, 100, 34)
+        frame[height // 2 :, :] = (34, 100, 34)
         # Simulate player (white body)
         cx = width // 2 + int(20 * np.sin(i * 0.1))
         cy = height // 2 - 30 + int(15 * abs(np.sin(i * 0.2)))  # jumping motion
@@ -207,11 +207,16 @@ def generate_synthetic_frames(
 
 
 BASKETBALL_KEYPOINTS = [
-    "right_shoulder", "left_shoulder",
-    "right_elbow", "left_elbow",
-    "right_wrist", "left_wrist",
-    "right_hip", "left_hip",
-    "right_knee", "left_knee",
+    "right_shoulder",
+    "left_shoulder",
+    "right_elbow",
+    "left_elbow",
+    "right_wrist",
+    "left_wrist",
+    "right_hip",
+    "left_hip",
+    "right_knee",
+    "left_knee",
 ]
 
 
@@ -233,7 +238,9 @@ def print_summary(results: list[ModelBenchmarkResult]) -> None:
         for r in results
     ]
 
-    col_widths = [max(len(h), max((len(row[i]) for row in rows), default=0)) for i, h in enumerate(headers)]
+    col_widths = [
+        max(len(h), max((len(row[i]) for row in rows), default=0)) for i, h in enumerate(headers)
+    ]
     fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
     print(fmt.format(*headers))
     print("  ".join("-" * w for w in col_widths))
@@ -308,9 +315,7 @@ def save_markdown_report(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Benchmark pose estimators for AI Shoot — Phase 1"
-    )
+    parser = argparse.ArgumentParser(description="Benchmark pose estimators for AI Shoot — Phase 1")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--video", type=Path, help="Path to basketball video file")
     source.add_argument("--synthetic", action="store_true", help="Use synthetic test frames")
