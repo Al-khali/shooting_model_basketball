@@ -54,7 +54,12 @@ Chaque ticket suit ce cycle exact. **Ne pas sauter d'étape.**
 ```
 1.  Checkout branche dédiée (feat/xxx ou fix/xxx)
 2.  Implémenter + tester localement (uv run pytest)
-3.  Lint propre (uv run ruff check src/ tests/)
+3.  Lint + format propres — **obligatoire avant tout push** :
+    ```
+    uv run ruff check .
+    uv run ruff format --check .
+    ```
+    Si format échoue → `uv run ruff format .` puis re-vérifier.
 4.  Commits atomiques (Conventional Commits)
 5.  Push + ouvrir la PR sur GitHub
 6.  Attendre la review automatique Gemini Code Assist (~2 min)
