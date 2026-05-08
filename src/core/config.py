@@ -1,5 +1,6 @@
 """Application settings — loaded from environment variables or .env file."""
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,8 +24,8 @@ class Settings(BaseSettings):
     # VLM
     vlm_provider: str = "gemini"  # "gemini" | "openai" | "qwen"
     vlm_model: str = "gemini-1.5-flash"
-    gemini_api_key: str = ""
-    openai_api_key: str = ""
+    gemini_api_key: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
 
     # Data paths
     data_raw_dir: str = "data/raw"

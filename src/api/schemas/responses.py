@@ -1,5 +1,7 @@
 """API request/response schemas (HTTP layer)."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from src.api.schemas.domain import CoachingFeedback, PlayerLevel
@@ -17,7 +19,7 @@ class SessionHistoryItem(BaseModel):
     task_id: str
     shot_result: str
     primary_correction: str
-    timestamp: str
+    timestamp: datetime
 
 
 class PlayerHistoryResponse(BaseModel):
