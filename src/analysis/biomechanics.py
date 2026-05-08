@@ -26,6 +26,8 @@ from src.api.schemas.domain import (
 
 logger = logging.getLogger(__name__)
 
+CONFIDENCE_THRESHOLD = 0.3  # consistent with perception pipeline
+
 # ---------------------------------------------------------------------------
 # NBA reference ranges (degrees)
 # Calibrated from biomechanics research + elite player analysis.
@@ -77,8 +79,12 @@ def angle_between_points(a: Point2D, vertex: Point2D, b: Point2D) -> float | Non
 
 
 def keypoint_map(frame: PoseFrame) -> dict[str, Point2D]:
-    """Build a name → (x, y) lookup for a frame's keypoints."""
-    return {kp.name: Point2D(kp.x, kp.y) for kp in frame.keypoints if kp.confidence > 0.1}
+    """Build a name → (x, y) lookup for a frame's keypoints.
+
+    Only includes keypoints above CONFIDENCE_THRESHOLD (0.3) to avoid
+    propagating noisy detections into angle calculations.
+    """
+    return {kp.name: Point2D(kp.x, kp.y) for kp in frame.keypoints if kp.confidence >= CONFIDENCE_THRESHOLD}
 
 
 # ---------------------------------------------------------------------------
@@ -298,9 +304,11 @@ class BiomechanicsAnalyzer:
         if not frames:
             return BiomechanicsReport(shot_result=shot_result)
 
-        # Use release frame for primary angle analysis; fall back to middle frame
+        # Use release frame for primary angle analysis.
+        # Fallback priority: highest-confidence frame (not middle frame, which
+        # could be any arbitrary phase and produce misleading biomechanics).
         release_idx = shot_phases.get(ShotPhase.RELEASE)
-        release_frame = self._find_frame(frames, release_idx) or frames[len(frames) // 2]
+        release_frame = self._find_frame(frames, release_idx) or self._best_frame(frames)
 
         angles = compute_joint_angles(release_frame)
         timing = compute_timing(frames, shot_phases)
@@ -327,3 +335,8 @@ class BiomechanicsAnalyzer:
             if f.frame_index == frame_index:
                 return f
         return None
+
+    @staticmethod
+    def _best_frame(frames: list[PoseFrame]) -> PoseFrame:
+        """Return the frame with the highest overall keypoint confidence."""
+        return max(frames, key=lambda f: f.confidence)

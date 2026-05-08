@@ -6,8 +6,6 @@ All tests use synthetic PoseFrames — no video or models needed.
 
 from __future__ import annotations
 
-import pytest
-
 from src.analysis.shot_detector import (
     ShotPhaseDetector,
     _fill_missing,
@@ -15,7 +13,6 @@ from src.analysis.shot_detector import (
     _smooth,
 )
 from src.api.schemas.domain import Keypoint, PoseFrame, ShotPhase
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

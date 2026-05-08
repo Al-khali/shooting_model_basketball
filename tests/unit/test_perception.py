@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from src.api.schemas.domain import Keypoint, PerceptionOutput, PoseModel, ShotPhase
+from src.api.schemas.domain import Keypoint, PerceptionOutput, PoseModel
 from src.perception.pose_estimator import (
     COCO_17_KEYPOINTS,
     BasePoseEstimator,
@@ -23,9 +23,7 @@ from src.perception.video_pipeline import (
     PipelineConfig,
     VideoProcessor,
     is_valid_pose,
-    sample_frames,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures & helpers

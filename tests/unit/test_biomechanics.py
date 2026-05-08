@@ -6,19 +6,16 @@ All tests use synthetic PoseFrames — no real video or models needed.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from src.analysis.biomechanics import (
     BiomechanicsAnalyzer,
+    Point2D,
+    angle_between_points,
     compute_alignment_score,
     compute_joint_angles,
     compute_timing,
     detect_issues,
-    keypoint_map,
-    angle_between_points,
-    Point2D,
 )
 from src.api.schemas.domain import (
     BiomechanicsReport,
@@ -29,7 +26,6 @@ from src.api.schemas.domain import (
     ShotResult,
     ShotTimingMetrics,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

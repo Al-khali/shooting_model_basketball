@@ -193,12 +193,19 @@ class ShotPhaseDetector:
         Strategy:
         1. Look for velocity zero-crossing after jump_start (hip apex)
         2. Among those candidates, pick the one where wrist is above shoulder
+
+        The search window is time-based (1.2s) using PoseFrame.timestamp_ms
+        to handle any frame rate (30/60/120/240fps).
         """
         n = len(velocity)
+        jump_ts = frames[jump_start].timestamp_ms
+        search_window_ms = 1200.0  # max 1.2s to find the apex after jump start
 
-        # Find velocity zero crossing (apex)
+        # Find velocity zero crossing (apex) within the time window
         apex_candidates: list[int] = []
-        for i in range(jump_start + 1, min(n, jump_start + 30)):
+        for i in range(jump_start + 1, n):
+            if frames[i].timestamp_ms - jump_ts > search_window_ms:
+                break
             if velocity[i - 1] <= 0.0 and velocity[i] >= 0.0:
                 apex_candidates.append(i)
 
