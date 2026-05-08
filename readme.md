@@ -1,5 +1,10 @@
 # Projet de machine learning pour améliorer la précision du tir au basketball
 
+## Documents projet (GitHub)
+- [ROADMAP.md](./ROADMAP.md)
+- [BACKLOG.md](./BACKLOG.md)
+- [CLAUDE.md](./CLAUDE.md)
+
 ## Introduction
 Ce projet utilise le machine learning pour améliorer la précision du tir au basketball en analysant les vidéos de joueurs en train de shooter le ballon et en fournissant des conseils pour améliorer leur technique.
 
