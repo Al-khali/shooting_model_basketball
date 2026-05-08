@@ -1,16 +1,47 @@
-# Fichiers système
+# System
 .DS_Store
 Thumbs.db
 
-# Fichiers Python
+# Python
 *.pyc
 __pycache__/
-
-# Fichiers de données
-/data/raw_data/*
-/data/processed_data/*
-
-# Fichiers d'environnement virtuel
+*.egg-info/
+dist/
+build/
+.venv/
 venv/
 env/
+
+# Data (never commit raw data)
+data/raw/*
+data/processed/*
+data/reference/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/reference/.gitkeep
+
+# Models (large binary files)
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.h5
+!models/.gitkeep
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# MLOps
+wandb/
+mlruns/
+*.log
+
+# Testing / Coverage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
 
