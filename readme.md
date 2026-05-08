@@ -1,77 +1,131 @@
-# Projet de machine learning pour améliorer la précision du tir au basketball
+<div align="center">
 
-## Documents projet (GitHub)
-- [ROADMAP.md](./ROADMAP.md)
-- [BACKLOG.md](./BACKLOG.md)
-- [CLAUDE.md](./CLAUDE.md)
+# 🏀 AI Shoot
 
-## Introduction
-Ce projet utilise le machine learning pour améliorer la précision du tir au basketball en analysant les vidéos de joueurs en train de shooter le ballon et en fournissant des conseils pour améliorer leur technique.
+**Real-time basketball intelligence powered by computer vision, biomechanics, and agentic AI**
 
-## Structure du projet
-Le projet est organisé en modules et en packages, chacun se concentrant sur une tâche spécifique. Voici une vue d'ensemble de la structure du projet :
+[![CI](https://github.com/Al-khali/shooting_model_basketball/actions/workflows/ci.yml/badge.svg)](https://github.com/Al-khali/shooting_model_basketball/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![uv](https://img.shields.io/badge/package%20manager-uv-purple.svg)](https://github.com/astral-sh/uv)
 
-```bash
-├── data
-│   ├── raw_data
-│   └── processed_data
-├── models
-│   ├── cnn_model.py
-│   └── ml_model.py
-├── utils
-│   ├── data_loader.py
-│   ├── data_preprocessor.py
-│   ├── metrics.py
-│   └── video_processor.py
-├── app.py
-├── requirements.txt
-├── README.md
-└── tests
-    ├── test_data_loader.py
-    ├── test_data_preprocessor.py
-    ├── test_metrics.py
-    ├── test_video_processor.py
-    └── conftest.py
+[Roadmap](ROADMAP.md) · [Backlog](BACKLOG.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+
+</div>
+
+---
+
+## What is AI Shoot?
+
+AI Shoot is a **real-time sports intelligence platform** — starting with basketball as the first vertical.
+
+It doesn't just give you a score. It **sees** your movement, **understands** your biomechanics, **reasons** like a coach, and **explains** what to fix in plain language:
+
+> *"Your right elbow is at 52° — 17° above the optimal range. This causes leftward deviation on mid-range shots. Fix: wall drill, 10 min, elbow aligned with wrist."*
+
+### The system pipeline
+
+```
+📹 Video Input
+    ↓
+👁️  PERCEPTION      → ViTPose/YOLOv11 extracts 133 keypoints per frame
+    ↓
+📐 BIOMECHANICS     → elbow angles, knee flex, release timing, ball arc
+    ↓
+🧠 VLM INTELLIGENCE → Gemini Flash / Qwen2-VL sees video + metrics together
+    ↓
+🤖 AGENTIC COACHING → LangGraph agents reason, prioritize, personalize
+    ↓
+💬 REAL FEEDBACK    → structured analysis + actionable drill recommendation
 ```
 
-### data
-Le package data contient les données brutes (raw_data) et les données préparées (processed_data).
+---
 
-### models
-Le package models contient les modèles de machine learning utilisés dans le projet. Il y a deux modèles disponibles : un modèle de réseau de neurones convolutifs (cnn_model.py) et un modèle de machine learning classique (ml_model.py).
+## Tech Stack
 
-### utils
-Le package utils contient des utilitaires pour charger et prétraiter les données, traiter les vidéos, calculer les métriques de performance et d'autres fonctions utiles.
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Pose estimation | ViTPose + MMPose | SOTA accuracy, 133 keypoints, extensible |
+| Object detection | YOLOv11 | Real-time speed + precision |
+| Temporal understanding | VideoMAE v2 | Understands motion sequences |
+| VLM Intelligence | Gemini Flash / Qwen2-VL | Video understanding + natural language |
+| Agent orchestration | LangGraph | Graph-based agents, streaming, production-ready |
+| API | FastAPI async + WebSocket | Real-time, modern |
+| Inference | ONNX Runtime + TensorRT | Edge + cloud deployment |
+| Experiment tracking | Weights & Biases | Reproducibility |
+| Data versioning | DVC | Versioned datasets |
+| Python packaging | uv + pyproject.toml | 2025 standard |
 
-### app.py
-Le fichier app.py contient le code pour lancer l'application web qui permet aux utilisateurs d'analyser leurs vidéos de basketball et d'obtenir des conseils pour améliorer leur technique de tir.
+---
 
-### requirements.txt
-Le fichier requirements.txt contient toutes les dépendances du projet, y compris les bibliothèques Python et les versions correspondantes.
+## Project Structure
 
-### README.md
-Le fichier README.md contient les informations de base sur le projet, y compris une brève introduction, les instructions pour installer et exécuter le projet, ainsi que les détails de la structure du projet et de son utilisation.
+```
+shoot-ai/
+├── src/
+│   ├── perception/     # Computer vision: pose estimation, tracking, video pipeline
+│   ├── analysis/       # Biomechanics: angles, timing, shot phase detection
+│   ├── agents/         # Agentic system: perceiver, analyzer, coach, planner
+│   ├── vlm/            # VLM integration: Gemini, Qwen2-VL, prompt templates
+│   ├── api/            # FastAPI: routes + Pydantic schemas
+│   ├── data/           # Data loaders, preprocessors, dataset schemas
+│   └── core/           # Config, logging, exceptions
+├── tests/              # Unit + integration tests
+├── scripts/            # Training, evaluation, benchmarking
+├── docs/               # Documentation
+├── legacy/             # Original prototype (archived, not active)
+└── pyproject.toml      # Packaging + all dependencies
+```
 
-### tests
-Le dossier tests contient les fichiers de test pour chaque module du projet, ainsi que le fichier de configuration conftest.py.
+---
 
-### Installation et exécution
-Pour installer et exécuter le projet, suivez les étapes suivantes :
+## Quickstart
 
-### Clonez le dépôt GitHub sur votre machine locale.
+**Requirements:** Python 3.11+, [uv](https://github.com/astral-sh/uv)
 
-Créez un environnement virtuel pour le projet en utilisant virtualenv ou conda.
+```bash
+# Clone
+git clone https://github.com/Al-khali/shooting_model_basketball.git
+cd shooting_model_basketball
 
-Installez les dépendances du projet à partir du fichier requirements.txt.
+# Create environment and install all dependencies
+uv venv --python 3.11
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+uv sync --extra dev
 
-Lancez l'application web en exécutant le fichier app.py.
+# Copy env template and add your API keys
+cp .env.example .env
 
-Uploadez la vidéo de votre shoot, le modèle fera l'analyse et vous donnera des conseils.
+# Run tests
+uv run pytest
+```
 
-### Conclusion
-Ce projet montre comment utiliser le machine learning pour améliorer la précision du tir au basketball en analysant les vidéos des joueurs. En structurant le projet en modules et en packages, en utilis
+---
 
+## Development Status
 
-### status
+> 🚧 **Active development — Phase 0 complete, Phase 1 (perception) in progress**
 
-ce projet est en cour de developement il n'est pas encore en phase de test la data ainsi l'app sera disponible prochainement 
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 0 — Foundations | ✅ Done | Structure, packaging, CI, contracts, governance |
+| Phase 1 — Perception | 🔄 In progress | ViTPose integration, biomechanics pipeline |
+| Phase 2 — VLM Intelligence | ⏳ Planned | Gemini/Qwen2-VL, feedback generation |
+| Phase 3 — Agentic System | ⏳ Planned | LangGraph agents, session memory |
+| Phase 4 — API + Real-time | ⏳ Planned | FastAPI WebSocket, async processing |
+
+See [ROADMAP.md](ROADMAP.md) for the full plan and [BACKLOG.md](BACKLOG.md) for open tasks.
+
+---
+
+## Contributing
+
+This project is heading toward open source. Contributions are welcome!
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow, commit conventions, and branch strategy.
+
+---
+
+## License
+
+[MIT](LICENSE) — © 2024 Al-khali
