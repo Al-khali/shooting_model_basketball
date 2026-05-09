@@ -69,6 +69,9 @@ dev = [
   "ruff>=0.4.0",
   "mypy>=1.10.0",
   "pre-commit>=3.7.0",
+  "pip-audit>=2.7.0",     # Python package CVE scanning
+  "bandit[toml]>=1.7.0",  # Python SAST
+  "anyio[trio]>=4.0.0",   # async test runner
 ]
 mlops = [
   "wandb>=0.17.0",
@@ -109,3 +112,12 @@ python_version = "3.12"
 strict = false
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
+
+# --- Bandit (SAST) ---
+[tool.bandit]
+exclude_dirs = ["tests", "legacy"]
+skips = [
+  "B101",  # assert — used in tests, not reachable in prod
+  "B104",  # hardcoded_bind_all_interfaces — intentional for containerised API (Cloud Run)
+  "B603",  # subprocess without shell — not used here, but suppress false positives
+]
