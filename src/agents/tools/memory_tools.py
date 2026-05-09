@@ -79,10 +79,9 @@ def save_coaching_result(
         Confirmation string with the updated session count, or an error message.
     """
     try:
-        from src.agents.memory import PlayerMemoryService
         from src.api.schemas.domain import CoachingFeedback, PlayerLevel
 
-        svc = PlayerMemoryService()
+        svc = _get_memory_service()
         level = PlayerLevel(player_level)
         feedback = CoachingFeedback.model_validate(json.loads(feedback_json))
         updated = svc.record_feedback(player_id, feedback, level)

@@ -99,10 +99,11 @@ class PlayerMemoryService:
         session.player_level = player_level
         session.total_sessions += 1
 
-        # Track issue frequencies
-        issues = list(feedback.biomechanics.issues_detected)
+        # Track issue frequencies — use a set to avoid double-counting when
+        # primary_issue also appears in issues_detected (common in the pipeline).
+        issues: set[str] = set(feedback.biomechanics.issues_detected)
         if feedback.biomechanics.primary_issue:
-            issues = [feedback.biomechanics.primary_issue] + issues
+            issues.add(feedback.biomechanics.primary_issue)
         for issue in issues:
             session.issue_counts[issue] = session.issue_counts.get(issue, 0) + 1
 

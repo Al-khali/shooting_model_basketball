@@ -82,12 +82,18 @@ class ShotAnalysisPipeline:
         # Step 2 — Perception
         perception_result = extract_shot_frames(video_input.video_path)
         if "error" in perception_result:
-            logger.warning("Perception error: %s", perception_result["error"])
+            # "error" key means a real runtime failure (not an ImportError stub).
+            # Propagating bad input to downstream steps produces misleading results.
+            logger.error("Perception fatal error: %s", perception_result["error"])
+            elapsed_ms = time.monotonic() * 1000 - start_ms
+            return self._error_result(player_id, perception_result["error"], elapsed_ms)
 
         # Step 3 — Biomechanics
         biomechanics_result = compute_biomechanics(json.dumps(perception_result))
         if "error" in biomechanics_result:
-            logger.warning("Biomechanics error: %s", biomechanics_result["error"])
+            logger.error("Biomechanics fatal error: %s", biomechanics_result["error"])
+            elapsed_ms = time.monotonic() * 1000 - start_ms
+            return self._error_result(player_id, biomechanics_result["error"], elapsed_ms)
 
         # Step 4 — VLM coaching feedback
         feedback_result = generate_coaching_feedback(
