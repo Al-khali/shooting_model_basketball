@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    cors_origins: list[str] = ["*"]
 
     # Inference
     pose_model: str = "yolov11-pose"  # "yolov11-pose" | "vitpose" | "mediapipe"
