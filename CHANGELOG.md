@@ -4,6 +4,30 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.8.0] — Phase 5b: Terraform IaC + GCP infrastructure (2026-05)
+
+### Added
+- `infra/terraform/` — complete GCP infrastructure as Terraform:
+  - `main.tf` — GCS remote backend, google provider, local variables
+  - `project.tf` — GCP project + 7 API enablements (run, artifactregistry, secretmanager, iam, cloudbuild, sts, iamcredentials)
+  - `registry.tf` — Artifact Registry docker repository
+  - `secrets.tf` — Secret Manager: `gemini-api-key` + `api-keys`
+  - `iam.tf` — Cloud Run SA (secretAccessor) + CI/CD SA (run.developer, artifactregistry.writer) + Workload Identity Federation pool+provider
+  - `cloud_run.tf` — Cloud Run v2 service (min=0/max=2, 1CPU/2Gi, liveness + startup probes, secrets via env refs)
+  - `variables.tf` — all variables including `image_tag` (SHA-based), `api_keys` as `list(string)`, `github_repository` for WIF
+  - `outputs.tf` — service_url, registry_url, WIF provider, SA emails
+  - `environments/dev/terraform.tfvars` — dev config (no secrets)
+- `infra/scripts/bootstrap.sh` — one-time: create GCP project + billing + GCS tfstate bucket
+- `infra/scripts/deploy.sh` — local alternative to CI: build → push → terraform apply
+- `.gitignore` — Terraform state files excluded
+
+### Security
+- Workload Identity Federation: GitHub Actions → GCP with zero static JSON keys
+- WIF locked to `var.github_repository` (prevents fork abuse)
+- IAM principle of least privilege: Cloud Run SA has only secretAccessor
+- Secrets passed at apply time via `TF_VAR_*` env vars, never in tfvars files
+- Gemini review PR #29 — 6 findings, all accepted (import workflow, image_tag, list(string), jsonencode, depends_on IAM, parameterised WIF)
+
 ## [0.7.0] — Phase 5b: Docker containerisation (2026-05)
 
 ### Added
