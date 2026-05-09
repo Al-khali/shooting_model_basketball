@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# uv
+.python-version
+
+# Environment files — NEVER commit real env files
+.env
+.env.local
+.env.*.local
+!.env.local.example
+
+# Data & models — too large for Docker image
+data/raw/
+data/processed/
+models/
+*.pt
+*.pth
+*.onnx
+*.tflite
+
+# Tests & CI
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+htmlcov/
+tests/
+test/
+
+# Dev tooling
+.github/
+docs/
+legacy/
+scripts/
+CHANGELOG.md
+ROADMAP.md
+BACKLOG.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
