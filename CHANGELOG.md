@@ -4,6 +4,31 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.5.0] — Phase 5a: Python 3.12 + Security CI (2026-05)
+
+### Added
+- `.github/workflows/security.yml` — workflow de sécurité dédié
+  - `pip-audit` : scan CVE de toutes les dépendances Python, déclenché sur chaque push/PR + cron hebdomadaire (lundi 08:00 UTC)
+  - `bandit` SAST : scan statique de `src/` — rapporte MEDIUM+, **fail CI sur HIGH**
+- `[tool.bandit]` config dans `pyproject.toml` : `exclude_dirs = ["tests", "legacy"]`, seul B104 supprimé (bind `0.0.0.0` intentionnel pour Cloud Run)
+- `pip-audit>=2.7.0` + `bandit[toml]>=1.7.0` + `anyio[trio]>=4.0.0` dans dev deps
+- CLAUDE.md step 3b : scan sécurité local obligatoire avant toute PR touchant `src/` ou les deps
+
+### Changed
+- Upgrade Python 3.11 → **3.12** — ~20% perf gain, compatibilité complète (MediaPipe bloque 3.13)
+- `pyproject.toml` : `requires-python = ">=3.12"`, `ruff target-version = py312`, `mypy python_version = 3.12`
+- `.python-version` : `3.12` (nouveau fichier pour `uv`)
+- `.github/workflows/ci.yml` : tous les jobs sur Python 3.12
+- README.md : badge Python 3.12+, quickstart mis à jour
+
+### Security
+- Gemini review PR #26 — 3 findings :
+  - **ACCEPTED** : sévérité locale alignée sur CI (`--severity-level medium`)
+  - **ACCEPTED** : B101 (assert) et B603 (subprocess) retirés des skips globaux — utiliser `# nosec` au call site
+  - **REJECTED** : suppression du flag `-c pyproject.toml` — prouvé nécessaire (sans lui, bandit ignore `[tool.bandit]` et flag B104)
+
+---
+
 ## [0.4.0] — Phase 4: API production-ready (2026-05)
 
 ### Added

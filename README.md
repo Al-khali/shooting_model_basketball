@@ -5,7 +5,7 @@
 **Real-time basketball intelligence powered by computer vision, biomechanics, and agentic AI**
 
 [![CI](https://github.com/Al-khali/shooting_model_basketball/actions/workflows/ci.yml/badge.svg)](https://github.com/Al-khali/shooting_model_basketball/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![uv](https://img.shields.io/badge/package%20manager-uv-purple.svg)](https://github.com/astral-sh/uv)
 
@@ -81,7 +81,7 @@ shoot-ai/
 
 ## Quickstart
 
-**Requirements:** Python 3.11+, [uv](https://github.com/astral-sh/uv)
+**Requirements:** Python 3.12+, [uv](https://github.com/astral-sh/uv)
 
 ```bash
 # Clone
@@ -89,7 +89,7 @@ git clone https://github.com/Al-khali/shooting_model_basketball.git
 cd shooting_model_basketball
 
 # Create environment and install all dependencies
-uv venv --python 3.11
+uv venv --python 3.12
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 uv sync --extra dev
 
@@ -113,7 +113,7 @@ uv run pytest
 | Phase 2 — VLM Intelligence | ✅ Done | Gemini Flash, prompt engineering, evaluation framework |
 | Phase 3 — Agentic System | ✅ Done | Google ADK 2.0 agents, player memory, coaching pipeline |
 | Phase 4 — API + Real-time | ✅ Done | FastAPI async, WebSocket streaming, player history, health endpoint |
-| Phase 5 — Edge & Auth | 🔄 Next | Auth API key, Docker, ONNX/TensorRT, on-device inference |
+| Phase 5 — Security + Deploy | 🔄 In Progress | Python 3.12 ✅, Security CI (pip-audit + bandit) ✅, Auth API key, Docker, Terraform/GCP |
 
 See [ROADMAP.md](ROADMAP.md) for the full plan and [BACKLOG.md](BACKLOG.md) for open tasks.
 

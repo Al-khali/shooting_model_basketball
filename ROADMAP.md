@@ -75,12 +75,33 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 
 ---
 
-## 📋 Phase 5 — Edge & Mobile + Auth *(priorité suivante)*
+## ✅ Phase 5a — Python 3.12 + Security CI *(livré 2026-05)*
 
-**Objectif :** inférence on-device pour usage terrain sans cloud + sécurité API.
+**Objectif :** upgrade runtime + scanning sécurité en CI.
 
-- [ ] Auth JWT ou API key (header `X-API-Key`)
-- [ ] Docker + docker-compose pour déploiement local
+- [x] Upgrade Python 3.11 → 3.12 (~20% perf, prêt pour Python 3.13 free-threaded quand MediaPipe suit)
+- [x] `pip-audit` — scan CVE deps sur chaque PR + cron hebdomadaire
+- [x] `bandit` SAST — fail CI sur HIGH, report MEDIUM+ (B104 seul skip intentionnel)
+- [x] CLAUDE.md : step 3b scan local obligatoire
+
+---
+
+## 📋 Phase 5b — Auth + Docker + GCP Deploy *(en cours)*
+
+**Objectif :** API sécurisée + containerisée + déployée sur GCP Cloud Run.
+
+- [ ] Auth `X-API-Key` middleware (401/403, /health exempt)
+- [ ] Docker multi-stage + docker-compose local
+- [ ] Terraform IaC (Cloud Run, Artifact Registry, Secret Manager, IAM)
+- [ ] GitHub Actions deploy workflow (Workload Identity Federation)
+- [ ] Smoke tests sur GCP DEV
+
+---
+
+## 📋 Phase 6 — Edge & Mobile *(vision moyen terme)*
+
+**Objectif :** inférence on-device pour usage terrain sans cloud.
+
 - [ ] Export ONNX + TensorRT des modèles de perception
 - [ ] SDK mobile (iOS/Android) — capture + preprocessing local
 - [ ] Mode hybride : perception on-device + VLM/agents cloud
@@ -88,7 +109,7 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 
 ---
 
-## 📋 Phase 6 — Multi-sport & Scale *(vision long terme)*
+## 📋 Phase 7 — Multi-sport & Scale *(vision long terme)*
 
 **Objectif :** étendre la plateforme au-delà du basketball.
 
