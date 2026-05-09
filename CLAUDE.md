@@ -23,7 +23,7 @@ Pipeline: `Vidéo → Perception → Biomécanique → VLM → Agents → Feedba
 | Packaging | `uv` + `pyproject.toml` (Python 3.11+) |
 | Pose estimation | ViTPose / YOLOv11-pose |
 | VLM | Gemini Flash / Qwen2-VL |
-| Agents | LangGraph |
+| Agents | Google ADK 2.0 (+ `ShotAnalysisPipeline` standalone) |
 | API | FastAPI async |
 | Validation | Pydantic v2 |
 | Lint/Format | ruff |
@@ -71,6 +71,12 @@ Chaque ticket suit ce cycle exact. **Ne pas sauter d'étape.**
 11. Si Gemini nuance → retour étape 7
 12. CI verte + Gemini acquiesce (ou silence ~3 min) → merger
 13. Puis seulement passer au ticket suivant
+14. **Après merge** : mettre à jour en un seul commit docs/ :
+    - README.md  → statut des phases, tech stack, quickstart
+    - CHANGELOG.md → entrée pour la phase/feature livrée
+    - ROADMAP.md  → cocher la phase complétée, décrire la suivante
+    - BACKLOG.md  → retirer les tickets fermés, afficher le prochain focus
+    - Fermer les issues GitHub correspondantes + mettre à jour le Kanban
 ```
 
 **Règles absolues :**
@@ -78,6 +84,7 @@ Chaque ticket suit ce cycle exact. **Ne pas sauter d'étape.**
 - Ne jamais merger sans avoir répondu à chaque finding (même les reject)
 - Ne jamais commencer le ticket suivant avant que la PR soit mergée
 - Si Gemini ne répond pas dans ~3 min après le comment taggué : le silence vaut acquiescement
+- Les mises à jour docs (étape 14) font partie du ticket — elles ne sont pas optionnelles
 
 ---
 

@@ -34,7 +34,7 @@ It doesn't just give you a score. It **sees** your movement, **understands** you
     ↓
 🧠 VLM INTELLIGENCE → Gemini Flash / Qwen2-VL sees video + metrics together
     ↓
-🤖 AGENTIC COACHING → LangGraph agents reason, prioritize, personalize
+🤖 AGENTIC COACHING → Google ADK 2.0 agents reason, prioritize, personalize
     ↓
 💬 REAL FEEDBACK    → structured analysis + actionable drill recommendation
 ```
@@ -49,7 +49,7 @@ It doesn't just give you a score. It **sees** your movement, **understands** you
 | Object detection | YOLOv11 | Real-time speed + precision |
 | Temporal understanding | VideoMAE v2 | Understands motion sequences |
 | VLM Intelligence | Gemini Flash / Qwen2-VL | Video understanding + natural language |
-| Agent orchestration | LangGraph | Graph-based agents, streaming, production-ready |
+| Agent orchestration | Google ADK 2.0 | Production bidirectional video streaming, built-in Session Service |
 | API | FastAPI async + WebSocket | Real-time, modern |
 | Inference | ONNX Runtime + TensorRT | Edge + cloud deployment |
 | Experiment tracking | Weights & Biases | Reproducibility |
@@ -104,15 +104,16 @@ uv run pytest
 
 ## Development Status
 
-> 🚧 **Active development — Phase 0 complete, Phase 1 (perception) in progress**
+> 🚧 **Active development — Phases 0–3 complete, Phase 4 (API) in progress**
 
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 0 — Foundations | ✅ Done | Structure, packaging, CI, contracts, governance |
-| Phase 1 — Perception | 🔄 In progress | ViTPose integration, biomechanics pipeline |
-| Phase 2 — VLM Intelligence | ⏳ Planned | Gemini/Qwen2-VL, feedback generation |
-| Phase 3 — Agentic System | ⏳ Planned | LangGraph agents, session memory |
-| Phase 4 — API + Real-time | ⏳ Planned | FastAPI WebSocket, async processing |
+| Phase 1 — Perception | ✅ Done | ViTPose integration, biomechanics pipeline, shot phase detection |
+| Phase 2 — VLM Intelligence | ✅ Done | Gemini Flash, prompt engineering, evaluation framework |
+| Phase 3 — Agentic System | ✅ Done | Google ADK 2.0 agents, player memory, coaching pipeline |
+| Phase 4 — API + Real-time | 🔄 In progress | FastAPI async, WebSocket streaming, coach view |
+| Phase 5 — Edge & Mobile | ⏳ Planned | ONNX/TensorRT, on-device inference, mobile SDK |
 
 See [ROADMAP.md](ROADMAP.md) for the full plan and [BACKLOG.md](BACKLOG.md) for open tasks.
 

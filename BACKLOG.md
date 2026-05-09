@@ -1,29 +1,43 @@
 # BACKLOG.md
 
-Backlog priorisé pour la relance du projet.
+Backlog priorisé — Phase 4 : API production-ready.
 
-## P0 — Bloquants de relance
-- [ ] Corriger la structure Python (imports cassés `ModuleNotFoundError`, modules et packaging).
-- [ ] Supprimer la duplication de logique (`app.py` et `metrics.py` actuellement redondants).
-- [ ] Définir et matérialiser l'architecture cible (`src/api`, `src/ml`, `src/data`, `tests`, `scripts`).
-- [ ] Rendre un flux MVP exécutable: `video -> preprocess -> inference -> feedback`.
-- [ ] Corriger incompatibilités de modèles et signatures (`VideoProcessor`, `RandomForest` sans `load_weights`, imports `np` manquants).
-- [ ] Ajouter un test minimum exécutable (actuellement 0 test découvert).
+> Phases 0–3 complètes. Voir [CHANGELOG.md](CHANGELOG.md) pour le détail de ce qui a été livré.
 
-## P1 — Qualité & reproductibilité
-- [ ] Mettre en place des tests unitaires minimaux sur utils/models.
-- [ ] Ajouter CI GitHub Actions (lint + tests).
-- [ ] Standardiser la gestion des dépendances/environnements.
-- [ ] Ajouter des jeux de données d'exemple et conventions dataset.
+---
 
-## P2 — Produit & open-source readiness
-- [ ] Refonte complète du README (vision, quickstart, architecture, limites).
-- [ ] Ajouter `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `SECURITY.md`.
-- [ ] Définir stratégie de commits, branches et release notes.
-- [ ] Ajouter templates d'issues/PR.
+## 🔄 En cours — Phase 4 : API
 
-## P3 — Cutting edge 2026+
-- [ ] Intégrer pipeline multimodal (vidéo + audio + contexte).
-- [ ] Ajouter couche agentique (analyse biomécanique, contexte, décision).
-- [ ] Introduire suivi d'expériences et versioning de modèles/datasets.
-- [ ] Définir protocole d'évaluation robustesse/biais/généralisation.
+### [P4-1] FastAPI production-ready (async + WebSocket)
+**GitHub issue:** #19
+
+- `POST /analyze` — upload vidéo multipart, lance le pipeline en background task
+- `GET /session/{id}` — polling sur l'état + résultats
+- `WebSocket /analyze/stream` — streaming temps réel (frames reçues + analyse en cours)
+- `GET /health` — liveness + readiness (dépendances optionnelles)
+- Gestion d'erreurs structurée (codes HTTP cohérents, messages JSON)
+- Tests d'intégration FastAPI (TestClient)
+
+### [P4-2] Vue coach — historique et progression joueur
+**GitHub issue:** #20
+
+- `GET /player/{id}/history` — liste des sessions avec métriques clés
+- `GET /player/{id}/trends` — évolution des issues récurrentes + drills assignés
+- Agrégation `PlayerMemoryService` → réponse structurée
+- Tests unitaires sur les routes coach
+
+---
+
+## 📋 Backlog moyen terme — Phase 5
+
+- Export ONNX des modèles de perception (YOLOv11-pose)
+- Packaging Docker + docker-compose
+- Auth API key simple (header `X-API-Key`)
+- Rate limiting + quotas par joueur
+
+---
+
+## ✅ Terminé (Phases 0–3)
+
+Toutes les tâches des phases 0, 1, 2 et 3 sont closes.
+Voir les issues GitHub fermées et [CHANGELOG.md](CHANGELOG.md) pour le détail.
