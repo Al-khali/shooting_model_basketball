@@ -113,7 +113,7 @@ uv run pytest
 | Phase 2 — VLM Intelligence | ✅ Done | Gemini Flash, prompt engineering, evaluation framework |
 | Phase 3 — Agentic System | ✅ Done | Google ADK 2.0 agents, player memory, coaching pipeline |
 | Phase 4 — API + Real-time | ✅ Done | FastAPI async, WebSocket streaming, player history, health endpoint |
-| Phase 5 — Security + Deploy | 🔄 In Progress | Python 3.12 ✅, Security CI ✅, Auth ✅, Docker ✅, Terraform ✅, CI/CD |
+| Phase 5 — Security + Deploy | 🔄 In Progress | Python 3.12 ✅, Security CI ✅, Auth ✅, Docker ✅, Terraform ✅, CI/CD ✅, GCP deploy (needs secrets) |
 
 See [ROADMAP.md](ROADMAP.md) for the full plan and [BACKLOG.md](BACKLOG.md) for open tasks.
 

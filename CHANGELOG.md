@@ -4,6 +4,22 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.9.0] — Phase 5b: CI/CD deploy + Trivy container scanning (2026-05)
+
+### Added
+- `.github/workflows/deploy.yml` — 3-job deploy pipeline:
+  - `build-and-push`: Workload Identity → docker buildx → Artifact Registry (SHA tag + :latest + build cache)
+  - `deploy`: terraform init → plan → apply (`image_tag=$SHA`, secrets via `TF_VAR_*`)
+  - `smoke-test`: /health + auth check against live Cloud Run service URL
+  - Concurrency group prevents parallel deploys
+- `.github/workflows/security.yml` — `container-scan` job: docker build → Trivy CRITICAL CVEs (fail on CRITICAL, ignore-unfixed)
+- `CONTRIBUTING.md` — CI/CD setup section: 5 required GitHub Secrets + first-time bootstrap instructions
+
+### Security
+- Workload Identity Federation (no JSON key) in all deploy jobs
+- Trivy blocks deploy if CRITICAL OS/library CVEs found in container image
+- Gemini review PR #30: 1 finding (MEDIUM) — bootstrap doc fixes (variable order, billing_account export, consistency)
+
 ## [0.8.0] — Phase 5b: Terraform IaC + GCP infrastructure (2026-05)
 
 ### Added
