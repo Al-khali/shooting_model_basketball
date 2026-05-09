@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Callable  # noqa: TC003
 from typing import Any
 
 from src.agents.memory import PlayerMemoryService
@@ -51,9 +52,19 @@ class ShotAnalysisPipeline:
     def __init__(self, memory_service: PlayerMemoryService | None = None) -> None:
         self.memory = memory_service or PlayerMemoryService()
 
-    def analyze(self, video_input: VideoInput) -> dict[str, Any]:
+    def analyze(
+        self,
+        video_input: VideoInput,
+        progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
+    ) -> dict[str, Any]:
         """
         Run the full analysis pipeline synchronously.
+
+        Args:
+            video_input: Video path + player context.
+            progress_callback: Optional function called after each pipeline step
+                with ``(event_name, event_data)``. Exceptions from the callback
+                are silently swallowed — they must never break the pipeline.
 
         Returns a dict with keys:
         - ``player_id``
@@ -65,6 +76,12 @@ class ShotAnalysisPipeline:
         """
         start_ms = time.monotonic() * 1000
         player_id = video_input.player_id or "anonymous"
+
+        def emit(event: str, data: dict[str, Any]) -> None:
+            if progress_callback is not None:
+                import contextlib  # noqa: PLC0415
+                with contextlib.suppress(Exception):
+                    progress_callback(event, data)
 
         # Step 1 — Load player context (mirrors ADK Session Service)
         context = self.memory.build_context(
@@ -78,6 +95,7 @@ class ShotAnalysisPipeline:
             context.player_level,
             context.session_count,
         )
+        emit("context_loaded", {"player_id": player_id, "session_count": context.session_count})
 
         # Step 2 — Perception
         perception_result = extract_shot_frames(video_input.video_path)
@@ -86,14 +104,24 @@ class ShotAnalysisPipeline:
             # Propagating bad input to downstream steps produces misleading results.
             logger.error("Perception fatal error: %s", perception_result["error"])
             elapsed_ms = time.monotonic() * 1000 - start_ms
+            emit("error", {"step": "perception", "message": perception_result["error"]})
             return self._error_result(player_id, perception_result["error"], elapsed_ms)
+        emit("perception_done", {
+            "player_detected": perception_result.get("player_detected", False),
+            "total_frames": perception_result.get("total_frames", 0),
+        })
 
         # Step 3 — Biomechanics
         biomechanics_result = compute_biomechanics(json.dumps(perception_result))
         if "error" in biomechanics_result:
             logger.error("Biomechanics fatal error: %s", biomechanics_result["error"])
             elapsed_ms = time.monotonic() * 1000 - start_ms
+            emit("error", {"step": "biomechanics", "message": biomechanics_result["error"]})
             return self._error_result(player_id, biomechanics_result["error"], elapsed_ms)
+        emit("biomechanics_done", {
+            "primary_issue": biomechanics_result.get("primary_issue"),
+            "shot_result": biomechanics_result.get("shot_result"),
+        })
 
         # Step 4 — VLM coaching feedback
         feedback_result = generate_coaching_feedback(
@@ -107,7 +135,13 @@ class ShotAnalysisPipeline:
         if "error" in feedback_result and not feedback_result.get("summary"):
             logger.error("Coaching fatal error: %s", feedback_result["error"])
             elapsed_ms = time.monotonic() * 1000 - start_ms
+            emit("error", {"step": "coaching", "message": feedback_result["error"]})
             return self._error_result(player_id, feedback_result["error"], elapsed_ms)
+        emit("coaching_done", {
+            "summary": feedback_result.get("summary", ""),
+            "model_used": feedback_result.get("model_used", ""),
+            "confidence": feedback_result.get("confidence", 0.0),
+        })
 
         # Step 5 — Training plan
         plan = build_training_plan(
@@ -116,6 +150,7 @@ class ShotAnalysisPipeline:
             recurring_issues_json=json.dumps(context.recurring_issues),
             previous_drills_json=json.dumps(context.previous_drills),
         )
+        emit("plan_done", {"drills_count": len(plan.get("drills", []))})
 
         # Step 6 — Persist session to memory (only for identified players)
         if video_input.player_id:

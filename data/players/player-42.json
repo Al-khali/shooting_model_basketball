@@ -1,0 +1,25 @@
+{
+  "player_id": "player-42",
+  "player_level": "advanced",
+  "total_sessions": 2,
+  "shot_history": [
+    {
+      "session_id": "c8e038b5-b939-49dd-8b90-1c6c533e6e8c",
+      "timestamp": "2026-05-09T10:13:18.730729Z",
+      "shot_result": "unknown",
+      "primary_correction": "Focus on your release mechanics",
+      "drills_assigned": [],
+      "alignment_score": null
+    },
+    {
+      "session_id": "f4158a1c-fd45-4c67-9628-1f7d25eea4a3",
+      "timestamp": "2026-05-09T10:13:24.979988Z",
+      "shot_result": "unknown",
+      "primary_correction": "Focus on your release mechanics",
+      "drills_assigned": [],
+      "alignment_score": null
+    }
+  ],
+  "issue_counts": {},
+  "drills_history": []
+}
