@@ -1,0 +1,426 @@
+"""
+Tests for Phase 2: VLM module.
+
+All tests are fully mocked — no real API calls, no API keys needed in CI.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from src.api.schemas.domain import (
+    BiomechanicsReport,
+    CoachingFeedback,
+    JointAngle,
+    PlayerLevel,
+    SessionContext,
+    ShotResult,
+    ShotTimingMetrics,
+)
+from src.vlm.base import BaseVLMClient, Message, VLMConfig, VLMError, VLMParseError
+from src.vlm.basketball_analyzer import BasketballVLMAnalyzer
+from src.vlm.evaluator import DimensionScore, EvaluationResult, FeedbackEvaluator
+from src.vlm.prompts.basketball import (
+    BASKETBALL_COACH_SYSTEM_PROMPT,
+    build_analysis_prompt,
+)
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+def make_report(
+    shot_result: ShotResult = ShotResult.MISSED,
+    primary_issue: str | None = "Elbow angle too wide",
+    alignment_score: float | None = 0.71,
+) -> BiomechanicsReport:
+    return BiomechanicsReport(
+        shot_result=shot_result,
+        joint_angles=[
+            JointAngle(
+                joint="right_elbow",
+                value_deg=68.0,
+                optimal_min=30.0,
+                optimal_max=50.0,
+            ),
+            JointAngle(
+                joint="right_knee",
+                value_deg=162.0,
+                optimal_min=150.0,
+                optimal_max=170.0,
+            ),
+        ],
+        timing=ShotTimingMetrics(
+            jump_to_release_ms=320.0,
+            early_release=False,
+        ),
+        alignment_score=alignment_score,
+        primary_issue=primary_issue,
+        issues_detected=["Elbow angle too wide at release"],
+    )
+
+
+def make_context(level: PlayerLevel = PlayerLevel.INTERMEDIATE) -> SessionContext:
+    return SessionContext(
+        player_id="player-42",
+        player_level=level,
+        session_count=3,
+        recurring_issues=["Elbow flare on fatigue"],
+        previous_drills=["Elbow tuck drill"],
+    )
+
+
+def make_good_feedback(report: BiomechanicsReport) -> CoachingFeedback:
+    """A feedback that should pass all quality checks."""
+    return CoachingFeedback(
+        player_id="player-42",
+        shot_result=report.shot_result,
+        confidence=0.82,
+        summary=(
+            "Your elbow angle of 68° is significantly outside the optimal 30–50° range. "
+            "This creates lateral deviation on the ball's flight path. "
+            "Tuck your elbow to align with the basket and improve shot consistency."
+        ),
+        primary_correction=(
+            "Tuck your shooting elbow under the ball at release — "
+            "point your elbow toward the basket, not sideways."
+        ),
+        detailed_analysis=(
+            "The right_elbow angle measured at 68° far exceeds the NBA-calibrated "
+            "optimal range of 30–50°. This pushes the ball off the shooting line. "
+            "Your right_knee at 162° is within the optimal range, meaning your "
+            "lower body kinetic chain is solid. Alignment score of 71% confirms "
+            "consistent mechanical compensation in the upper body. "
+            "Focus all corrections on elbow alignment during the release phase."
+        ),
+        biomechanics=report,
+        drills=[],
+        model_used="gemini-2.0-flash|prompts@v1.0",
+        processing_time_ms=850.0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Concrete mock client
+# ---------------------------------------------------------------------------
+
+
+class MockVLMClient(BaseVLMClient):
+    """Test double for BaseVLMClient."""
+
+    def __init__(self, json_response: dict | None = None, text_response: str = "") -> None:
+        super().__init__(VLMConfig())
+        self._json = json_response or {}
+        self._text = text_response
+
+    def complete(self, messages: list[Message]) -> str:
+        return self._text
+
+    def complete_json(self, messages: list[Message]) -> dict:
+        return self._json
+
+
+class ErrorVLMClient(BaseVLMClient):
+    """Client that always raises VLMError."""
+
+    def complete(self, messages: list[Message]) -> str:
+        raise VLMError("API unavailable")
+
+    def complete_json(self, messages: list[Message]) -> dict:
+        raise VLMError("API unavailable")
+
+
+class ParseErrorVLMClient(BaseVLMClient):
+    """Client that raises VLMParseError on JSON, returns text on text."""
+
+    def complete(self, messages: list[Message]) -> str:
+        return '{"summary": "ok", "primary_correction": "Tuck elbow down", "detailed_analysis": "The elbow flare at release reduces accuracy", "confidence": 0.75, "drills": []}'
+
+    def complete_json(self, messages: list[Message]) -> dict:
+        raise VLMParseError("Not JSON")
+
+
+# ---------------------------------------------------------------------------
+# Tests: prompts
+# ---------------------------------------------------------------------------
+
+
+class TestBuildAnalysisPrompt:
+    def test_contains_shot_result(self) -> None:
+        report = make_report(shot_result=ShotResult.MISSED)
+        prompt = build_analysis_prompt(report)
+        assert "MISSED" in prompt
+
+    def test_contains_joint_angles(self) -> None:
+        report = make_report()
+        prompt = build_analysis_prompt(report)
+        assert "right_elbow" in prompt
+        assert "68.0" in prompt
+
+    def test_contains_issues(self) -> None:
+        report = make_report()
+        prompt = build_analysis_prompt(report)
+        assert "Elbow angle too wide" in prompt
+
+    def test_contains_player_context(self) -> None:
+        report = make_report()
+        ctx = make_context()
+        prompt = build_analysis_prompt(report, ctx)
+        assert "player-42" in prompt
+        assert "Elbow flare on fatigue" in prompt
+        assert "Elbow tuck drill" in prompt
+
+    def test_level_instruction_beginner(self) -> None:
+        report = make_report()
+        ctx = make_context(level=PlayerLevel.BEGINNER)
+        prompt = build_analysis_prompt(report, ctx)
+        assert "simple" in prompt.lower() or "fundamental" in prompt.lower()
+
+    def test_level_instruction_elite(self) -> None:
+        report = make_report()
+        ctx = make_context(level=PlayerLevel.ELITE)
+        prompt = build_analysis_prompt(report, ctx)
+        assert "nba" in prompt.lower() or "kinetic" in prompt.lower()
+
+    def test_no_context_runs_cleanly(self) -> None:
+        report = make_report()
+        prompt = build_analysis_prompt(report, context=None)
+        assert "SHOT BIOMECHANICS" in prompt
+
+    def test_alignment_score_formatted(self) -> None:
+        report = make_report(alignment_score=0.71)
+        prompt = build_analysis_prompt(report)
+        assert "71%" in prompt
+
+    def test_shot_number_in_prompt(self) -> None:
+        report = make_report()
+        prompt = build_analysis_prompt(report, shot_number=5)
+        assert "shot #5" in prompt.lower()
+
+    def test_system_prompt_non_empty(self) -> None:
+        assert len(BASKETBALL_COACH_SYSTEM_PROMPT) > 100
+        assert "biomechanics" in BASKETBALL_COACH_SYSTEM_PROMPT.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests: BasketballVLMAnalyzer
+# ---------------------------------------------------------------------------
+
+
+class TestBasketballVLMAnalyzer:
+    def _good_raw(self) -> dict:
+        return {
+            "summary": "Your elbow is too wide at 68 degrees.",
+            "primary_correction": "Tuck your elbow under the ball at release.",
+            "detailed_analysis": "The right elbow angle at 68° exceeds optimal 30–50°. Alignment 71%.",
+            "confidence": 0.82,
+            "drills": [
+                {
+                    "name": "Wall Drill",
+                    "description": "Stand against wall, tuck elbow.",
+                    "duration_minutes": 10,
+                    "focus": "Elbow alignment",
+                    "difficulty": "intermediate",
+                }
+            ],
+        }
+
+    def test_analyze_returns_coaching_feedback(self) -> None:
+        report = make_report()
+        client = MockVLMClient(json_response=self._good_raw())
+        analyzer = BasketballVLMAnalyzer(client)
+        feedback = analyzer.analyze(report)
+        assert isinstance(feedback, CoachingFeedback)
+        assert feedback.shot_result == ShotResult.MISSED
+        assert feedback.confidence == 0.82
+        assert len(feedback.drills) == 1
+
+    def test_analyze_with_context(self) -> None:
+        report = make_report()
+        ctx = make_context()
+        client = MockVLMClient(json_response=self._good_raw())
+        analyzer = BasketballVLMAnalyzer(client)
+        feedback = analyzer.analyze(report, ctx)
+        assert feedback.player_id == "player-42"
+
+    def test_confidence_clamped(self) -> None:
+        raw = self._good_raw()
+        raw["confidence"] = 99.0  # invalid — should be clamped to 1.0
+        client = MockVLMClient(json_response=raw)
+        feedback = BasketballVLMAnalyzer(client).analyze(make_report())
+        assert feedback.confidence == 1.0
+
+    def test_drill_parsing(self) -> None:
+        client = MockVLMClient(json_response=self._good_raw())
+        feedback = BasketballVLMAnalyzer(client).analyze(make_report())
+        drill = feedback.drills[0]
+        assert drill.name == "Wall Drill"
+        assert drill.difficulty == PlayerLevel.INTERMEDIATE
+
+    def test_max_three_drills(self) -> None:
+        raw = self._good_raw()
+        raw["drills"] = [raw["drills"][0]] * 5  # 5 drills → should cap at 3
+        client = MockVLMClient(json_response=raw)
+        feedback = BasketballVLMAnalyzer(client).analyze(make_report())
+        assert len(feedback.drills) <= 3
+
+    def test_model_used_contains_version(self) -> None:
+        client = MockVLMClient(json_response=self._good_raw())
+        feedback = BasketballVLMAnalyzer(client).analyze(make_report())
+        assert "prompts@" in feedback.model_used
+
+    def test_fallback_on_parse_error(self) -> None:
+        """ParseErrorVLMClient fails JSON but succeeds on text — should fallback."""
+        client = ParseErrorVLMClient(VLMConfig())
+        analyzer = BasketballVLMAnalyzer(client)
+        feedback = analyzer.analyze(make_report())
+        assert isinstance(feedback, CoachingFeedback)
+
+    def test_error_fallback_on_api_failure(self) -> None:
+        """ErrorVLMClient always fails — should return error fallback, not crash."""
+        client = ErrorVLMClient(VLMConfig())
+        feedback = BasketballVLMAnalyzer(client).analyze(make_report())
+        assert feedback.confidence == 0.0
+        assert feedback.model_used == "fallback"
+
+    def test_analyze_session_processes_all_shots(self) -> None:
+        reports = [make_report() for _ in range(3)]
+        client = MockVLMClient(json_response=self._good_raw())
+        analyzer = BasketballVLMAnalyzer(client)
+        results = analyzer.analyze_session(reports)
+        assert len(results) == 3
+
+    def test_analyze_session_continues_on_error(self) -> None:
+        """One shot failing should not abort the rest."""
+        reports = [make_report() for _ in range(3)]
+        client = ErrorVLMClient(VLMConfig())
+        results = BasketballVLMAnalyzer(client).analyze_session(reports)
+        assert len(results) == 3
+        assert all(r.model_used == "fallback" for r in results)
+
+    def test_missing_drills_key_graceful(self) -> None:
+        raw = self._good_raw()
+        del raw["drills"]
+        client = MockVLMClient(json_response=raw)
+        feedback = BasketballVLMAnalyzer(client).analyze(make_report())
+        assert feedback.drills == []
+
+    def test_processing_time_set(self) -> None:
+        client = MockVLMClient(json_response=self._good_raw())
+        feedback = BasketballVLMAnalyzer(client).analyze(make_report())
+        assert feedback.processing_time_ms is not None
+        assert feedback.processing_time_ms >= 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: FeedbackEvaluator
+# ---------------------------------------------------------------------------
+
+
+class TestFeedbackEvaluator:
+    def test_good_feedback_passes(self) -> None:
+        result = EvaluationResult(
+            dimensions=[
+                DimensionScore("completeness", 1.0, True, "ok"),
+                DimensionScore("actionability", 1.0, True, "ok"),
+                DimensionScore("specificity", 1.0, True, "ok"),
+                DimensionScore("consistency", 1.0, True, "ok"),
+                DimensionScore("no_hallucination", 1.0, True, "ok"),
+            ]
+        )
+        assert result.passed
+        assert result.overall_score == 1.0
+
+    def test_evaluator_returns_evaluation_result(self) -> None:
+        evaluator = FeedbackEvaluator()
+        report = make_report()
+        feedback = make_good_feedback(report)
+        result = evaluator.evaluate(feedback)
+        assert isinstance(result, EvaluationResult)
+        assert len(result.dimensions) == 5
+
+    def test_completeness_fails_on_short_summary(self) -> None:
+        report = make_report()
+        feedback = make_good_feedback(report)
+        # Set all 3 text fields too short to guarantee completeness failure
+        feedback.summary = "Bad shot."
+        feedback.primary_correction = "Fix it."
+        feedback.detailed_analysis = "Short."
+        evaluator = FeedbackEvaluator()
+        result = evaluator.evaluate(feedback)
+        completeness = next(d for d in result.dimensions if d.name == "completeness")
+        assert not completeness.passed
+
+    def test_actionability_fails_without_verbs(self) -> None:
+        report = make_report()
+        feedback = make_good_feedback(report)
+        feedback.primary_correction = "The elbow angle is problematic."
+        feedback.summary = "This is an issue that exists in the shot."
+        evaluator = FeedbackEvaluator()
+        result = evaluator.evaluate(feedback)
+        actionability = next(d for d in result.dimensions if d.name == "actionability")
+        assert not actionability.passed
+
+    def test_specificity_passes_with_numeric_refs(self) -> None:
+        report = make_report()
+        feedback = make_good_feedback(report)
+        evaluator = FeedbackEvaluator()
+        result = evaluator.evaluate(feedback)
+        specificity = next(d for d in result.dimensions if d.name == "specificity")
+        assert specificity.passed
+
+    def test_hallucination_flag_on_ungrounded_claims(self) -> None:
+        report = make_report()
+        feedback = make_good_feedback(report)
+        feedback.detailed_analysis = (
+            "Studies show that the elbow should be tucked. Research indicates "
+            "that NBA average is 45 degrees. Tuck your elbow at release."
+        )
+        evaluator = FeedbackEvaluator()
+        result = evaluator.evaluate(feedback)
+        hallucination = next(d for d in result.dimensions if d.name == "no_hallucination")
+        assert not hallucination.passed
+
+    def test_evaluation_result_summary_non_empty(self) -> None:
+        evaluator = FeedbackEvaluator()
+        result = evaluator.evaluate(make_good_feedback(make_report()))
+        summary = result.summary()
+        assert "Overall:" in summary
+        assert len(summary) > 20
+
+    def test_overall_score_is_average(self) -> None:
+        dims = [
+            DimensionScore("a", 1.0, True, ""),
+            DimensionScore("b", 0.5, True, ""),
+            DimensionScore("c", 0.0, False, ""),
+        ]
+        result = EvaluationResult(dimensions=dims)
+        assert abs(result.overall_score - 0.5) < 0.01
+
+    def test_passed_false_if_any_dimension_fails(self) -> None:
+        dims = [
+            DimensionScore("a", 1.0, True, ""),
+            DimensionScore("b", 0.0, False, ""),
+        ]
+        result = EvaluationResult(dimensions=dims)
+        assert not result.passed
+
+
+# ---------------------------------------------------------------------------
+# Tests: BaseVLMClient contract
+# ---------------------------------------------------------------------------
+
+
+class TestVLMClientContract:
+    def test_model_id_returns_config_model(self) -> None:
+        client = MockVLMClient()
+        assert client.model_id == "gemini-2.0-flash"
+
+    def test_vlm_error_is_exception(self) -> None:
+        with pytest.raises(VLMError):
+            raise VLMError("test error")
+
+    def test_vlm_parse_error_is_vlm_error(self) -> None:
+        with pytest.raises(VLMError):
+            raise VLMParseError("parse failure")
