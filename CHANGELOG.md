@@ -4,6 +4,25 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.7.0] — Phase 5b: Docker containerisation (2026-05)
+
+### Added
+- `Dockerfile` — multi-stage build `linux/amd64` (Cloud Run target)
+  - Stage 1 builder: uv from official image (`ghcr.io/astral-sh/uv:0.11.12`), two-layer caching (deps → project `--no-editable`)
+  - Stage 2 runtime: `python:3.12-slim`, non-root `appuser`, `libgl1`/`libglib2.0-0` for OpenCV
+  - `CMD` uses `exec python -m uvicorn` for direct SIGTERM reception (graceful Cloud Run shutdown)
+- `docker-compose.yml` — local dev orchestration (`platform: linux/amd64`, data volume, healthcheck)
+- `.dockerignore` — excludes `data/`, `models/`, `tests/`, dev tooling
+- `.env.example` — comprehensive template (all settings documented, consolidated from `.env.local.example`)
+
+### Changed
+- `.gitignore` — `.env.local.example` removed; `.env.example` is the canonical template
+
+### Notes
+- MediaPipe has no `linux/arm64` wheel — `--platform linux/amd64` required on Apple Silicon (QEMU)
+- uv binary copied from official image to avoid install-script QEMU issues
+- Gemini review PR #28 — 3 findings, all accepted: env consistency (F1 HIGH), uv pinning (F2 MEDIUM), exec signal handling (F3 MEDIUM)
+
 ## [0.6.0] — Phase 5b: Auth middleware (2026-05)
 
 ### Added

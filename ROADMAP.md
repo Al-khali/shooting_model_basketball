@@ -91,7 +91,7 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 **Objectif :** API sécurisée + containerisée + déployée sur GCP Cloud Run.
 
 - [x] Auth `X-API-Key` middleware (401/403, /health exempt, OPTIONS pass)
-- [ ] Docker multi-stage + docker-compose local
+- [x] Docker multi-stage + docker-compose local (linux/amd64, uv pinned, exec signal handling)
 - [ ] Terraform IaC (Cloud Run, Artifact Registry, Secret Manager, IAM)
 - [ ] GitHub Actions deploy workflow (Workload Identity Federation)
 - [ ] Smoke tests sur GCP DEV
