@@ -56,3 +56,25 @@ jobs:
       - name: Run bandit (fail on HIGH)
         run: uv run bandit -r src/ -c pyproject.toml --severity-level high
         # Fails CI only on HIGH severity issues
+
+  container-scan:
+    name: Container scan (Trivy)
+    runs-on: ubuntu-latest
+    # Only on PRs and main pushes (not weekly cron — image rebuild not scheduled)
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image for scanning
+        run: docker build --platform linux/amd64 -t shoot-ai:scan .
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "shoot-ai:scan"
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL"
+        # Fail CI on CRITICAL CVEs only — MEDIUM/HIGH logged but don't block

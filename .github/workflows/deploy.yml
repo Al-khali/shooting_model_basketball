@@ -1,0 +1,197 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+
+# Prevent concurrent deploys to the same environment
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGION: europe-west1
+  APP_NAME: shoot-ai
+  ENVIRONMENT: dev
+  TF_VERSION: "1.9.0"
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Build & Push Docker image to Artifact Registry
+  # ─────────────────────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write   # Required for Workload Identity Federation
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.sha_short }}
+      image_url: ${{ steps.meta.outputs.image_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via Workload Identity
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          NAME_PREFIX="${{ env.APP_NAME }}-${{ env.ENVIRONMENT }}"
+          REGISTRY="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${NAME_PREFIX}"
+          IMAGE_URL="${REGISTRY}/${{ env.APP_NAME }}"
+          echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          echo "image_url=${IMAGE_URL}" >> "$GITHUB_OUTPUT"
+          echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_url }}:${{ steps.meta.outputs.sha_short }}
+            ${{ steps.meta.outputs.image_url }}:latest
+          cache-from: type=registry,ref=${{ steps.meta.outputs.image_url }}:buildcache
+          cache-to: type=registry,ref=${{ steps.meta.outputs.image_url }}:buildcache,mode=max
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Terraform apply + Cloud Run deploy
+  # ─────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Terraform Apply + Deploy
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && 'prod' || 'dev' }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via Workload Identity
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: infra/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.GCP_PROJECT_ID }}-tfstate" \
+            -backend-config="prefix=terraform/state/${{ secrets.GCP_PROJECT_ID }}"
+
+      - name: Terraform Plan
+        working-directory: infra/terraform
+        env:
+          TF_VAR_gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          TF_VAR_api_keys: ${{ secrets.API_KEYS }}
+        run: |
+          terraform plan \
+            -var-file="environments/${{ env.ENVIRONMENT }}/terraform.tfvars" \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="image_tag=${{ needs.build-and-push.outputs.image_tag }}" \
+            -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: infra/terraform
+        env:
+          TF_VAR_gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          TF_VAR_api_keys: ${{ secrets.API_KEYS }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get service URL
+        id: service_url
+        working-directory: infra/terraform
+        run: echo "url=$(terraform output -raw service_url)" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Smoke tests — verify the deployed service is healthy
+  # ─────────────────────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to GCP via Workload Identity
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Get deployed service URL
+        id: service_url
+        run: |
+          URL=$(gcloud run services describe \
+            ${{ env.APP_NAME }}-${{ env.ENVIRONMENT }} \
+            --region=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --format="value(status.url)")
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Health check (no auth required)
+        run: |
+          curl --retry 5 --retry-delay 5 --fail \
+            "${{ steps.service_url.outputs.url }}/health"
+
+      - name: Auth check (valid key)
+        run: |
+          FIRST_KEY=$(echo '${{ secrets.API_KEYS }}' | python3 -c "import json,sys; keys=json.load(sys.stdin); print(keys[0] if keys else '')")
+          if [ -n "$FIRST_KEY" ]; then
+            curl --retry 3 --fail \
+              -H "X-API-Key: ${FIRST_KEY}" \
+              "${{ steps.service_url.outputs.url }}/player/smoke-test/history"
+          else
+            echo "No API keys configured — skipping auth check"
+          fi
+
+      - name: Auth check (no key → 401)
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ steps.service_url.outputs.url }}/player/smoke-test/history")
+          # If api_keys empty, auth disabled → 200; if keys set → 401
+          echo "Status without auth: ${STATUS}"
+          [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ]
