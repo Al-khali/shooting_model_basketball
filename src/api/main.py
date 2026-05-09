@@ -46,8 +46,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Auth middleware — wraps the app after CORS so CORS pre-flight OPTIONS requests
-# are still handled correctly (CORS middleware runs first from the outside).
+# Auth middleware registered last = outermost (Starlette wraps in reverse order).
+# It therefore runs BEFORE CORSMiddleware. OPTIONS exemption above ensures
+# CORS preflight requests still reach CORSMiddleware unchanged.
 app.add_middleware(APIKeyMiddleware)  # type: ignore[arg-type]
 
 app.include_router(router)

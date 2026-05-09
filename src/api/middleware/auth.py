@@ -22,7 +22,7 @@ from src.core.config import settings
 
 # Paths that bypass authentication (no trailing slash variants needed — FastAPI
 # normalises paths before they reach the ASGI scope).
-_EXEMPT_PATHS: frozenset[str] = frozenset({"/health"})
+_EXEMPT_PATHS: frozenset[str] = frozenset({"/health", "/health/"})
 
 
 class APIKeyMiddleware:
@@ -33,6 +33,11 @@ class APIKeyMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        # Always let CORS preflight through — browser OPTIONS requests never carry auth headers.
+        if scope["type"] == "http" and scope.get("method") == "OPTIONS":
             await self.app(scope, receive, send)
             return
 

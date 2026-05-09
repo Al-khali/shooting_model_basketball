@@ -58,7 +58,7 @@ class TestHealth:
 
     def test_health_version(self, client: TestClient) -> None:
         body = client.get("/health").json()
-        assert body["version"] == "0.4.0"
+        assert body["version"] == "0.5.0"
 
     def test_health_components_present(self, client: TestClient) -> None:
         body = client.get("/health").json()
@@ -354,9 +354,12 @@ class TestAuth:
         original = settings.api_keys
         try:
             settings.api_keys = ["key-alpha", "key-beta"]
-            r1 = client.get("/health", headers={"X-API-Key": "key-alpha"})
-            r2 = client.get("/health", headers={"X-API-Key": "key-beta"})
+            # Use a protected endpoint (not /health which is exempt) so we
+            # actually verify that both keys are accepted by the middleware.
+            r1 = client.get("/analyze/nonexistent-task", headers={"X-API-Key": "key-alpha"})
+            r2 = client.get("/analyze/nonexistent-task", headers={"X-API-Key": "key-beta"})
         finally:
             settings.api_keys = original
-        assert r1.status_code == 200
-        assert r2.status_code == 200
+        # 404 = auth passed, task not found — both keys are valid
+        assert r1.status_code == 404
+        assert r2.status_code == 404
