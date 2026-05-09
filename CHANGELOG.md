@@ -4,7 +4,33 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
-## [0.5.0] — Phase 5a: Python 3.12 + Security CI (2026-05)
+## [0.6.0] — Phase 5b: Auth middleware (2026-05)
+
+### Added
+- `src/api/middleware/auth.py` — pure-ASGI `APIKeyMiddleware`
+  - `X-API-Key` header required on all endpoints when `settings.api_keys` is non-empty
+  - `GET /health` + `GET /health/` always exempt (Cloud Run liveness probe)
+  - `OPTIONS` requests always pass (CORS preflight)
+  - WebSocket: close with code 4403 on auth failure
+  - Disabled when `api_keys = []` (default — dev / CI mode)
+- `src/core/config.py` — `api_keys: list[str] = []` (env var `API_KEYS` as JSON array)
+- 6 new integration tests in `TestAuth` (182 tests total)
+
+### Changed
+- `src/api/main.py` — `APIKeyMiddleware` registered (last added = outermost in Starlette)
+- `src/api/schemas/responses.py` — version `0.4.0` → `0.5.0`
+
+### Security
+- Gemini review PR #27 — 5 findings all accepted:
+  - F1 HIGH: OPTIONS requests exempted from auth (CORS preflight)
+  - F2 HIGH: version updated in schemas + test aligned
+  - F3 MEDIUM: middleware order comment corrected (last added = outermost)
+  - F4 MEDIUM: `/health/` trailing slash added to exempt paths
+  - F5 MEDIUM: multi-key test uses protected endpoint
+
+---
+
+
 
 ### Added
 - `.github/workflows/security.yml` — workflow de sécurité dédié
