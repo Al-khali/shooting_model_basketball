@@ -70,3 +70,48 @@ chore/*       ← maintenance
 
 ## Questions ?
 Ouvre une issue ou contacte directement via GitHub.
+
+---
+
+## CI/CD Setup (maintainers)
+
+### Required GitHub Secrets
+
+Set these in **Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|---|---|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name (from `terraform output workload_identity_provider`) |
+| `GCP_SERVICE_ACCOUNT` | CI/CD service account email (from `terraform output cicd_service_account`) |
+| `GCP_PROJECT_ID` | GCP project ID (e.g. `shoot-ai-dev`) |
+| `GEMINI_API_KEY` | Gemini API key |
+| `API_KEYS` | JSON array of API keys (e.g. `["key1","key2"]`) |
+
+### First-time GCP setup
+
+```bash
+export PROJECT_ID="shoot-ai-dev"
+export BILLING_ACCOUNT="XXXXXX-XXXXXX-XXXXXX"
+bash infra/scripts/bootstrap.sh
+
+# Set all variables upfront (available to both import and apply)
+cd infra/terraform
+terraform init -backend-config="bucket=${PROJECT_ID}-tfstate" \
+               -backend-config="prefix=terraform/state/${PROJECT_ID}"
+
+export TF_VAR_project_id="$PROJECT_ID"
+export TF_VAR_billing_account="$BILLING_ACCOUNT"
+export TF_VAR_gemini_api_key="$GEMINI_API_KEY"
+export TF_VAR_api_keys='["dev-key-1"]'
+
+# Import the pre-existing project (created by bootstrap.sh) then apply
+terraform import -var-file=environments/dev/terraform.tfvars google_project.shoot_ai "$PROJECT_ID"
+terraform apply -var-file=environments/dev/terraform.tfvars
+```
+
+After apply, copy the outputs to GitHub Secrets:
+```bash
+terraform output workload_identity_provider  # → GCP_WORKLOAD_IDENTITY_PROVIDER
+terraform output cicd_service_account        # → GCP_SERVICE_ACCOUNT
+```
+
