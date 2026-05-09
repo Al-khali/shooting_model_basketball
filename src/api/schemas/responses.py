@@ -56,7 +56,7 @@ class HealthComponent(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"] = "ok"
-    version: str = "0.4.0"
+    version: str = "0.5.0"
     components: dict[str, HealthComponent] = Field(default_factory=dict)
 
 

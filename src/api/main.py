@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.middleware.auth import APIKeyMiddleware
 from src.api.routes import router
 from src.core.config import settings
 
@@ -31,7 +32,7 @@ app = FastAPI(
         "Real-time basketball shot analysis powered by computer vision, "
         "biomechanics, and agentic AI (Google ADK 2.0 + Gemini Flash)."
     ),
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -44,5 +45,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Auth middleware registered last = outermost (Starlette wraps in reverse order).
+# It therefore runs BEFORE CORSMiddleware. OPTIONS exemption above ensures
+# CORS preflight requests still reach CORSMiddleware unchanged.
+app.add_middleware(APIKeyMiddleware)  # type: ignore[arg-type]
 
 app.include_router(router)

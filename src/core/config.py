@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_origins: list[str] = ["*"]
 
+    # Auth — leave empty to disable (dev / CI mode)
+    # Set API_KEYS as a JSON array: '["key-abc","key-xyz"]'
+    api_keys: list[str] = []
+
     # Inference
     pose_model: str = "yolov11-pose"  # "yolov11-pose" | "vitpose" | "mediapipe"
     device: str = "cpu"  # "cpu" | "cuda" | "mps"
