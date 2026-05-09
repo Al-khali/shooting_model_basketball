@@ -1,52 +1,46 @@
 # BACKLOG.md
 
-Backlog priorisé — Phase 5b : Auth + Docker + GCP Deploy.
+Backlog priorisé — Phase 6 : Edge & Mobile.
 
-> Phases 0–4 + Phase 5a (Python 3.12 + Security CI) complètes. Voir [CHANGELOG.md](CHANGELOG.md) pour le détail.
+> Phases 0–5b complètes. Voir [CHANGELOG.md](CHANGELOG.md) pour le détail.
 
 ---
 
-## 📋 Phase 5b : Auth + Docker + GCP Deploy
+## ✅ Phase 5b : Auth + Docker + GCP Deploy *(terminée)*
 
-### [P5-1] Auth API key
+Tous les items P5-1 → P5-5 livrés. Voir [CHANGELOG.md](CHANGELOG.md) v0.7.0 → v1.0.0.
+
+---
+
+## 📋 Phase 6 : Edge & Mobile *(prochaine)*
+
+### [P6-1] Export ONNX des modèles de perception
 **Priorité :** HIGH
 
-- Header `X-API-Key` sur tous les endpoints
-- `settings.api_keys: list[str]` depuis env var `API_KEYS` (comma-separated)
-- 401 si clé absente, 403 si invalide
-- `GET /health` exempt (Cloud Run liveness probe)
-- Tests d'intégration : 401 no key, 403 invalid, 200 valid, health sans clé
+- Export `PoseEstimator` + `ShotPhaseDetector` en ONNX
+- Optimisation TensorRT pour GPU embarqué
+- Validation : même sorties que le modèle PyTorch original
 
-### [P5-2] Docker + docker-compose
+### [P6-2] SDK mobile — capture + preprocessing
 **Priorité :** HIGH
 
-- `Dockerfile` multi-stage (builder: `uv sync --frozen --no-dev` + runtime: port 8080)
-- `docker-compose.yml` : api + volumes data/models
-- `.dockerignore`, `.env.local.example`
-- Health check Docker sur `GET /health`
-- Smoke : `docker build` + `compose up` + `curl /health`
+- iOS (Swift) + Android (Kotlin) SDK
+- Capture vidéo + preprocessing local (resize, normalize)
+- Envoi frames + métriques bruts vers API Cloud Run
 
-### [P5-3] Terraform IaC (GCP)
-**Priorité :** HIGH
-
-- `infra/terraform/` : project, registry, secrets, iam, cloud_run
-- Cloud Run : min=0, max=3, cpu=1, mem=2Gi, timeout=300s
-- Artifact Registry + GCP Secret Manager (GEMINI_API_KEY, API_KEYS)
-- `infra/scripts/bootstrap.sh` pour gcloud billing setup
-
-### [P5-4] GitHub Actions deploy workflow
+### [P6-3] Mode hybride on-device / cloud
 **Priorité :** MEDIUM
 
-- `.github/workflows/deploy.yml`
-- Workload Identity Federation (pas de JSON key)
-- docker build → push Artifact Registry → terraform apply dev
+- Perception on-device (ONNX) + VLM/agents cloud
+- Cible latence : < 200 ms perception, < 2 s feedback complet
+- Fallback cloud si device trop lent
 
-### [P5-5] Smoke tests GCP DEV
+### [P6-4] Tests de performance & benchmarks
 **Priorité :** MEDIUM
 
-- `curl /health` depuis Cloud Run URL
-- Upload vidéo test → vérifier 202 + task_id
-- Valider auth (401 sans clé, 200 avec clé)
+- Benchmark latence iPhone 15 / Pixel 8
+- Profiling mémoire modèle ONNX
+- CI automated perf regression test
 
 ### [P5-6] Trivy container scanning
 **Priorité :** LOW

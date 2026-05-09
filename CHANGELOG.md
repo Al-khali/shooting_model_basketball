@@ -4,6 +4,22 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.0] — Phase 5b: Complete — smoke test script (2026-05)
+
+### Added
+- `scripts/smoke_test.sh` — portable smoke test for local Docker + GCP Cloud Run:
+  - `check_health()`: single HTTP call → 3 assertions (status 200, body `status=ok`, `version` key present)
+  - `check()`: HTTP status assertion with `|| echo "000"` fallback (safe under `set -e`)
+  - `check_body()`: exact JSON key=value match via `sys.argv` (injection-safe, no substring false-positives)
+  - Auth, CORS preflight, 404 assertions (auth skipped if `API_KEY` not set)
+  - Portable `mktemp` approach (no GNU `head -n -1`)
+- Phase 5b **code-complete**: Security CI ✅ Auth ✅ Docker ✅ Terraform ✅ CI/CD ✅ Smoke script ✅
+
+### Security
+- Gemini review PR #31: 3 findings — all ACCEPTED: network error safety (F2), injection-safe pattern passing (F1 HIGH), single-request health check (F3)
+
+---
+
 ## [0.9.0] — Phase 5b: CI/CD deploy + Trivy container scanning (2026-05)
 
 ### Added

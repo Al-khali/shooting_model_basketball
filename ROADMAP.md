@@ -86,7 +86,7 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 
 ---
 
-## 📋 Phase 5b — Auth + Docker + GCP Deploy *(en cours)*
+## ✅ Phase 5b — Auth + Docker + GCP Deploy *(livré 2026-05)*
 
 **Objectif :** API sécurisée + containerisée + déployée sur GCP Cloud Run.
 
@@ -94,7 +94,7 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 - [x] Docker multi-stage + docker-compose local (linux/amd64, uv pinned, exec signal handling)
 - [x] Terraform IaC (Cloud Run v2, Artifact Registry, Secret Manager, IAM, Workload Identity)
 - [x] GitHub Actions deploy workflow (Workload Identity Federation, Trivy container scan)
-- [ ] Smoke tests sur GCP DEV *(requires GCP project + secrets configured)*
+- [x] `scripts/smoke_test.sh` — validation locale + GCP Cloud Run (health, auth, CORS, 404)
 
 ---
 
