@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Real-time basketball intelligence platform powered by computer vision and agentic AI"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
   { name = "Al-khali" }
 ]
@@ -17,8 +17,8 @@ classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
@@ -86,7 +86,7 @@ packages = ["src"]
 
 # --- Ruff (linter + formatter) ---
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100
 exclude = ["legacy/"]
 
@@ -105,7 +105,7 @@ addopts = "--cov=src --cov-report=term-missing --cov-fail-under=0 -v"
 
 # --- Mypy ---
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = false
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
