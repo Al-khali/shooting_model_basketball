@@ -308,7 +308,7 @@ class BiomechanicsAnalyzer:
         if shot_phases is None:
             shot_phases = {}
         if not frames:
-            return BiomechanicsReport(shot_result=shot_result)
+            return BiomechanicsReport(shot_result=shot_result, primary_issue=None)
 
         # Use release frame for primary angle analysis.
         # Fallback priority: highest-confidence frame (not middle frame, which

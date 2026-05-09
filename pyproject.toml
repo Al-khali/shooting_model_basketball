@@ -108,3 +108,4 @@ addopts = "--cov=src --cov-report=term-missing --cov-fail-under=0 -v"
 python_version = "3.11"
 strict = false
 ignore_missing_imports = true
+plugins = ["pydantic.mypy"]

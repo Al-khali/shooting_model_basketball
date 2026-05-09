@@ -266,4 +266,4 @@ def _fill_missing(values: list[float | None]) -> list[float]:
         else:
             i += 1
 
-    return [float(v) for v in result]  # type: ignore[misc]
+    return [float(v) for v in result]  # type: ignore[arg-type]
