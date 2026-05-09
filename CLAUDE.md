@@ -60,6 +60,13 @@ Chaque ticket suit ce cycle exact. **Ne pas sauter d'étape.**
     uv run ruff format --check .
     ```
     Si format échoue → `uv run ruff format .` puis re-vérifier.
+3b. **Security scan local avant toute PR qui touche à src/ ou deps** :
+    ```
+    uv run pip-audit               # CVEs packages
+    uv run bandit -r src/ -c pyproject.toml --severity-level medium  # SAST MEDIUM+
+    ```
+    Si pip-audit remonte des vulns → évaluer mise à jour dep + noter dans PR.
+    Si bandit remonte un HIGH → corriger avant de push.
 4.  Commits atomiques (Conventional Commits)
 5.  Push + ouvrir la PR sur GitHub
 6.  Attendre la review automatique Gemini Code Assist (~2 min)
@@ -162,7 +169,7 @@ refactor: refactoring sans changement de comportement
 
 ```bash
 # Install
-uv venv --python 3.11 && source .venv/bin/activate
+uv venv --python 3.12 && source .venv/bin/activate
 uv sync --extra dev
 
 # Tests
@@ -174,6 +181,10 @@ uv run pytest --cov=src               # avec couverture
 uv run ruff check src/ tests/          # lint
 uv run ruff format src/ tests/         # format
 uv run mypy src/                       # type check
+
+# Security
+uv run pip-audit                       # CVEs packages
+uv run bandit -r src/ -c pyproject.toml --severity-level medium  # SAST MEDIUM+
 ```
 
 ---
