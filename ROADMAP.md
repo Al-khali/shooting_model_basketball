@@ -60,24 +60,27 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 
 ---
 
-## 🔄 Phase 4 — API production-ready *(en cours)*
+## ✅ Phase 4 — API production-ready
 
 **Objectif :** exposer le pipeline complet via une API async + streaming temps réel.
 
-- [ ] `POST /analyze` — upload vidéo + analyse async (background task)
-- [ ] `GET /session/{id}` — état et résultats de session
-- [ ] `WebSocket /analyze/stream` — streaming frame-by-frame du pipeline
-- [ ] `GET /player/{id}/history` — historique coaching + progression
-- [ ] `GET /health` — liveness + readiness
-- [ ] Auth JWT ou API key
-- [ ] Docker + docker-compose pour déploiement local
+- [x] `POST /analyze` — upload vidéo + analyse async (background task)
+- [x] `GET /session/{id}` — état et résultats de session
+- [x] `WebSocket /analyze/stream` — streaming binaire sécurisé (pas de path traversal)
+- [x] `GET /player/{id}/history` — historique coaching + progression
+- [x] `GET /health` — liveness + readiness (ok / degraded / down)
+- [x] CORS config-driven via `settings.cors_origins`
+- [x] Upload chunké 1 MB (pas d'OOM sur gros fichiers)
+- [x] 176 tests · ruff · mypy · Gemini review 5/5 findings résolus
 
 ---
 
-## 📋 Phase 5 — Edge & Mobile *(planifiée)*
+## 📋 Phase 5 — Edge & Mobile + Auth *(priorité suivante)*
 
-**Objectif :** inférence on-device pour usage terrain sans cloud.
+**Objectif :** inférence on-device pour usage terrain sans cloud + sécurité API.
 
+- [ ] Auth JWT ou API key (header `X-API-Key`)
+- [ ] Docker + docker-compose pour déploiement local
 - [ ] Export ONNX + TensorRT des modèles de perception
 - [ ] SDK mobile (iOS/Android) — capture + preprocessing local
 - [ ] Mode hybride : perception on-device + VLM/agents cloud

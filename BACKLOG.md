@@ -1,43 +1,44 @@
 # BACKLOG.md
 
-Backlog priorisé — Phase 4 : API production-ready.
+Backlog priorisé — Phase 5 : Edge, Auth & Déploiement.
 
-> Phases 0–3 complètes. Voir [CHANGELOG.md](CHANGELOG.md) pour le détail de ce qui a été livré.
-
----
-
-## 🔄 En cours — Phase 4 : API
-
-### [P4-1] FastAPI production-ready (async + WebSocket)
-**GitHub issue:** #19
-
-- `POST /analyze` — upload vidéo multipart, lance le pipeline en background task
-- `GET /session/{id}` — polling sur l'état + résultats
-- `WebSocket /analyze/stream` — streaming temps réel (frames reçues + analyse en cours)
-- `GET /health` — liveness + readiness (dépendances optionnelles)
-- Gestion d'erreurs structurée (codes HTTP cohérents, messages JSON)
-- Tests d'intégration FastAPI (TestClient)
-
-### [P4-2] Vue coach — historique et progression joueur
-**GitHub issue:** #20
-
-- `GET /player/{id}/history` — liste des sessions avec métriques clés
-- `GET /player/{id}/trends` — évolution des issues récurrentes + drills assignés
-- Agrégation `PlayerMemoryService` → réponse structurée
-- Tests unitaires sur les routes coach
+> Phases 0–4 complètes. Voir [CHANGELOG.md](CHANGELOG.md) pour le détail de ce qui a été livré.
 
 ---
 
-## 📋 Backlog moyen terme — Phase 5
+## 📋 Phase 5 : Auth + Docker + Edge
 
-- Export ONNX des modèles de perception (YOLOv11-pose)
-- Packaging Docker + docker-compose
-- Auth API key simple (header `X-API-Key`)
-- Rate limiting + quotas par joueur
+### [P5-1] Auth API key
+**Priorité :** HIGH
+
+- Header `X-API-Key` sur tous les endpoints
+- `settings.api_keys: list[str]` depuis env var
+- 401 si clé absente ou invalide
+- Tests d'intégration auth
+
+### [P5-2] Docker + docker-compose
+**Priorité :** HIGH
+
+- `Dockerfile` multi-stage (builder + runtime)
+- `docker-compose.yml` : api + volumes data/models
+- Health check Docker sur `GET /health`
+
+### [P5-3] Export ONNX perception
+**Priorité :** MEDIUM
+
+- Export YOLOv11-pose → ONNX
+- Inférence ONNX Runtime (CPU + CUDA)
+- Benchmark latence vs PyTorch
+
+### [P5-4] Rate limiting
+**Priorité :** LOW
+
+- `slowapi` ou middleware custom
+- Quotas par API key : N uploads/minute
 
 ---
 
-## ✅ Terminé (Phases 0–3)
+## ✅ Terminé (Phases 0–4)
 
-Toutes les tâches des phases 0, 1, 2 et 3 sont closes.
+Toutes les tâches des phases 0, 1, 2, 3 et 4 sont closes.
 Voir les issues GitHub fermées et [CHANGELOG.md](CHANGELOG.md) pour le détail.

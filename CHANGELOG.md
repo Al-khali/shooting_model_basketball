@@ -4,14 +4,28 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
-## [Unreleased] — Phase 4: API production-ready
+## [0.4.0] — Phase 4: API production-ready (2026-05)
 
-### Planned
-- `POST /analyze` — analyse vidéo asynchrone (upload + WebSocket streaming)
-- `GET /session/{id}` — état et résultats de session
-- `WebSocket /analyze/stream` — streaming temps réel du pipeline
-- `GET /player/{id}/history` — historique coaching joueur
-- `GET /health` — endpoint de santé
+### Added
+- `src/api/main.py` — application FastAPI avec lifespan, CORS config-driven
+- `src/api/store.py` — `TaskStore` singleton in-memory (asyncio.Lock)
+- `src/api/routes/analyze.py`
+  - `POST /analyze` — upload multipart vidéo → 202 + task_id (background task)
+  - `GET /session/{task_id}` — polling lifecycle : processing / done / error
+  - `WS /analyze/stream` — streaming binaire sécurisé : client envoie les bytes vidéo, le serveur contrôle le chemin (pas de path traversal)
+- `src/api/routes/health.py` — `GET /health` avec statut 3-niveaux : ok / degraded / down
+- `src/api/routes/players.py` — `GET /player/{id}/history` : historique coaching + issues récurrentes
+- `src/agents/orchestrator.py` — paramètre `progress_callback` sur `analyze()` pour streaming WS
+- 23 nouveaux tests d'intégration (176 tests au total)
+
+### Security
+- WS `video_path` path traversal corrigé : le client envoie les bytes bruts, jamais un chemin serveur
+- CORS : `allow_origins` via `settings.cors_origins` (env `CORS_ORIGINS`), `allow_credentials=False`
+
+### Fixed
+- Bug health : `overall` ignorait le statut `"down"` — corrigé avec priorité `down > degraded > ok`
+- Upload OOM : lecture par chunks 1 MB au lieu de `await file.read()` complet en mémoire
+- `contextlib` importé au niveau module (était différé inutilement dans `emit()`)
 
 ---
 

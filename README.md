@@ -104,7 +104,7 @@ uv run pytest
 
 ## Development Status
 
-> 🚧 **Active development — Phases 0–3 complete, Phase 4 (API) in progress**
+> 🚧 **Active development — Phases 0–4 complete, Phase 5 (Auth + Docker + Edge) next**
 
 | Phase | Status | Description |
 |-------|--------|-------------|
@@ -112,8 +112,8 @@ uv run pytest
 | Phase 1 — Perception | ✅ Done | ViTPose integration, biomechanics pipeline, shot phase detection |
 | Phase 2 — VLM Intelligence | ✅ Done | Gemini Flash, prompt engineering, evaluation framework |
 | Phase 3 — Agentic System | ✅ Done | Google ADK 2.0 agents, player memory, coaching pipeline |
-| Phase 4 — API + Real-time | 🔄 In progress | FastAPI async, WebSocket streaming, coach view |
-| Phase 5 — Edge & Mobile | ⏳ Planned | ONNX/TensorRT, on-device inference, mobile SDK |
+| Phase 4 — API + Real-time | ✅ Done | FastAPI async, WebSocket streaming, player history, health endpoint |
+| Phase 5 — Edge & Auth | 🔄 Next | Auth API key, Docker, ONNX/TensorRT, on-device inference |
 
 See [ROADMAP.md](ROADMAP.md) for the full plan and [BACKLOG.md](BACKLOG.md) for open tasks.
 
