@@ -28,9 +28,11 @@ dependencies = [
   "numpy>=1.26.0",
   "Pillow>=10.0.0",
 
-  # Pose estimation (MMPose ecosystem)
+  # Pose estimation
   "torch>=2.2.0",
   "torchvision>=0.17.0",
+  "ultralytics>=8.2.0",    # YOLOv11-pose (primary estimator for POC)
+  "mediapipe>=0.10.0",     # MediaPipe BlazePose (benchmark candidate)
 
   # ML & Analysis
   "scikit-learn>=1.4.0",
@@ -106,3 +108,4 @@ addopts = "--cov=src --cov-report=term-missing --cov-fail-under=0 -v"
 python_version = "3.11"
 strict = false
 ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
