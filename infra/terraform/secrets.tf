@@ -33,5 +33,5 @@ resource "google_secret_manager_secret" "api_keys" {
 
 resource "google_secret_manager_secret_version" "api_keys" {
   secret      = google_secret_manager_secret.api_keys.id
-  secret_data = var.api_keys
+  secret_data = jsonencode(var.api_keys)
 }

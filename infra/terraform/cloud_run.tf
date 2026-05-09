@@ -3,7 +3,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 locals {
-  # Image is pushed by CI/CD with the commit SHA tag; placeholder for first apply
+  # Image tag is set by CI/CD (commit SHA). Default 'latest' for local apply.
   image_url = "${var.region}-docker.pkg.dev/${var.project_id}/${local.name_prefix}/${var.app_name}"
 }
 
@@ -25,7 +25,7 @@ resource "google_cloud_run_v2_service" "api" {
     }
 
     containers {
-      image = "${local.image_url}:latest"
+      image = "${local.image_url}:${var.image_tag}"
 
       resources {
         limits = {
@@ -103,6 +103,8 @@ resource "google_cloud_run_v2_service" "api" {
     google_project_service.apis["run.googleapis.com"],
     google_secret_manager_secret_version.gemini_api_key,
     google_secret_manager_secret_version.api_keys,
+    google_secret_manager_secret_iam_member.run_gemini_key,
+    google_secret_manager_secret_iam_member.run_api_keys,
   ]
 }
 

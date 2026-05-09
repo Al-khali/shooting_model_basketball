@@ -1,5 +1,13 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # GCP Project + API enablement
+#
+# The project is created by bootstrap.sh so the GCS backend bucket can exist
+# before the first `terraform apply`. After bootstrap, import it:
+#
+#   terraform import google_project.shoot_ai $PROJECT_ID
+#
+# This brings the existing project under Terraform management without
+# recreating it (avoids "project already exists" error on first apply).
 # ──────────────────────────────────────────────────────────────────────────────
 
 resource "google_project" "shoot_ai" {

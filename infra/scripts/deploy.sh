@@ -9,7 +9,7 @@
 #   export REGION="europe-west1"
 #   export ENVIRONMENT="dev"
 #   export GEMINI_API_KEY="your-key"
-#   export API_KEYS='["your-dev-key"]'
+#   export TF_VAR_api_keys='["your-dev-key"]'   # Terraform list(string) format
 #   bash infra/scripts/deploy.sh
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -49,7 +49,8 @@ terraform init -input=false \
 terraform apply -auto-approve \
   -var-file="environments/${ENVIRONMENT}/terraform.tfvars" \
   -var="gemini_api_key=${GEMINI_API_KEY}" \
-  -var="api_keys=${API_KEYS:-[]}"
+  -var="image_tag=${SHA}"
+# api_keys is passed via TF_VAR_api_keys env var (list format: '["key1","key2"]')
 
 SERVICE_URL="$(terraform output -raw service_url)"
 cd ../..

@@ -68,8 +68,20 @@ variable "gemini_api_key" {
 }
 
 variable "api_keys" {
-  description = "JSON array of API keys for X-API-Key auth (e.g. '[\"key1\",\"key2\"]')"
-  type        = string
+  description = "List of API keys for X-API-Key auth (e.g. [\"key1\",\"key2\"])"
+  type        = list(string)
   sensitive   = true
-  default     = "[]"
+  default     = []
+}
+
+variable "image_tag" {
+  description = "Docker image tag to deploy (commit SHA from CI/CD, e.g. 'abc1234')"
+  type        = string
+  default     = "latest"
+}
+
+variable "github_repository" {
+  description = "GitHub repository path for Workload Identity Federation (org/repo format)"
+  type        = string
+  default     = "Al-khali/shooting_model_basketball"
 }
