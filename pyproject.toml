@@ -117,7 +117,7 @@ plugins = ["pydantic.mypy"]
 [tool.bandit]
 exclude_dirs = ["tests", "legacy"]
 skips = [
-  "B101",  # assert — used in tests, not reachable in prod
   "B104",  # hardcoded_bind_all_interfaces — intentional for containerised API (Cloud Run)
-  "B603",  # subprocess without shell — not used here, but suppress false positives
+  # B101 (assert): removed — tests/ already excluded, assert in prod code is risky (stripped by -O)
+  # B603 (subprocess): removed — no subprocess in src/; use # nosec B603 at call site if ever needed
 ]

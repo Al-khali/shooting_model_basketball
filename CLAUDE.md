@@ -63,7 +63,7 @@ Chaque ticket suit ce cycle exact. **Ne pas sauter d'étape.**
 3b. **Security scan local avant toute PR qui touche à src/ ou deps** :
     ```
     uv run pip-audit               # CVEs packages
-    uv run bandit -r src/ -c pyproject.toml --severity-level high  # SAST HIGH
+    uv run bandit -r src/ -c pyproject.toml --severity-level medium  # SAST MEDIUM+
     ```
     Si pip-audit remonte des vulns → évaluer mise à jour dep + noter dans PR.
     Si bandit remonte un HIGH → corriger avant de push.
@@ -184,7 +184,7 @@ uv run mypy src/                       # type check
 
 # Security
 uv run pip-audit                       # CVEs packages
-uv run bandit -r src/ -c pyproject.toml --severity-level high  # SAST
+uv run bandit -r src/ -c pyproject.toml --severity-level medium  # SAST MEDIUM+
 ```
 
 ---
