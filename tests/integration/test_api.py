@@ -267,3 +267,96 @@ class TestAnalyzeStream:
         assert final["event"] in ("done", "error")
         if final["event"] == "done":
             assert "coaching_feedback" in final["data"]
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+
+class TestAuth:
+    """Tests for X-API-Key authentication middleware.
+
+    The middleware is disabled when ``settings.api_keys`` is empty (default).
+    Tests that exercise auth directly patch the setting to a known value.
+    """
+
+    def test_health_exempt_without_key(self, client: TestClient) -> None:
+        """GET /health must always succeed regardless of auth config."""
+        from src.core.config import settings
+
+        original = settings.api_keys
+        try:
+            settings.api_keys = ["valid-key-123"]
+            response = client.get("/health")
+        finally:
+            settings.api_keys = original
+        assert response.status_code == 200
+
+    def test_missing_key_returns_401(self, client: TestClient) -> None:
+        from src.core.config import settings
+
+        original = settings.api_keys
+        try:
+            settings.api_keys = ["valid-key-123"]
+            response = client.get("/analyze/nonexistent-task")
+        finally:
+            settings.api_keys = original
+        assert response.status_code == 401
+        assert "Missing" in response.json()["detail"]
+
+    def test_invalid_key_returns_403(self, client: TestClient) -> None:
+        from src.core.config import settings
+
+        original = settings.api_keys
+        try:
+            settings.api_keys = ["valid-key-123"]
+            response = client.get(
+                "/analyze/nonexistent-task",
+                headers={"X-API-Key": "wrong-key"},
+            )
+        finally:
+            settings.api_keys = original
+        assert response.status_code == 403
+        assert "Invalid" in response.json()["detail"]
+
+    def test_valid_key_passes(self, client: TestClient) -> None:
+        from src.core.config import settings
+
+        original = settings.api_keys
+        try:
+            settings.api_keys = ["valid-key-123"]
+            response = client.get(
+                "/analyze/nonexistent-task",
+                headers={"X-API-Key": "valid-key-123"},
+            )
+        finally:
+            settings.api_keys = original
+        # 404 is the expected response for a non-existent task — auth passed
+        assert response.status_code == 404
+
+    def test_auth_disabled_when_no_keys_configured(self, client: TestClient) -> None:
+        """Empty api_keys list means no auth required (default dev mode)."""
+        from src.core.config import settings
+
+        original = settings.api_keys
+        try:
+            settings.api_keys = []
+            response = client.get("/analyze/nonexistent-task")
+        finally:
+            settings.api_keys = original
+        # No auth → falls through to route handler → 404 (task not found)
+        assert response.status_code == 404
+
+    def test_multiple_valid_keys(self, client: TestClient) -> None:
+        from src.core.config import settings
+
+        original = settings.api_keys
+        try:
+            settings.api_keys = ["key-alpha", "key-beta"]
+            r1 = client.get("/health", headers={"X-API-Key": "key-alpha"})
+            r2 = client.get("/health", headers={"X-API-Key": "key-beta"})
+        finally:
+            settings.api_keys = original
+        assert r1.status_code == 200
+        assert r2.status_code == 200
