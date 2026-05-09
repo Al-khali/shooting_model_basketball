@@ -94,17 +94,19 @@ export PROJECT_ID="shoot-ai-dev"
 export BILLING_ACCOUNT="XXXXXX-XXXXXX-XXXXXX"
 bash infra/scripts/bootstrap.sh
 
-# Init + import existing project
+# Set all variables upfront (available to both import and apply)
 cd infra/terraform
 terraform init -backend-config="bucket=${PROJECT_ID}-tfstate" \
                -backend-config="prefix=terraform/state/${PROJECT_ID}"
-terraform import google_project.shoot_ai $PROJECT_ID
 
-# Apply (secrets via env vars)
+export TF_VAR_project_id="$PROJECT_ID"
+export TF_VAR_billing_account="$BILLING_ACCOUNT"
 export TF_VAR_gemini_api_key="$GEMINI_API_KEY"
 export TF_VAR_api_keys='["dev-key-1"]'
-terraform apply -var-file=environments/dev/terraform.tfvars \
-                -var="project_id=$PROJECT_ID"
+
+# Import the pre-existing project (created by bootstrap.sh) then apply
+terraform import -var-file=environments/dev/terraform.tfvars google_project.shoot_ai "$PROJECT_ID"
+terraform apply -var-file=environments/dev/terraform.tfvars
 ```
 
 After apply, copy the outputs to GitHub Secrets:
