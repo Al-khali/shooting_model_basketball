@@ -6,7 +6,7 @@
 FROM --platform=linux/amd64 python:3.12-slim AS builder
 
 # Copy uv binary from official image (avoids curl + install script under QEMU)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.12 /uv /uvx /bin/
 
 WORKDIR /build
 
@@ -58,4 +58,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')"
 
-CMD ["sh", "-c", "python -m uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "exec python -m uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT}"]
