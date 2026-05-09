@@ -215,8 +215,9 @@ class FeedbackEvaluator:
         issues = []
         primary_issue = feedback.biomechanics.primary_issue
         if primary_issue:
-            # Key words from the issue should appear in the feedback
-            key_words = [w.lower() for w in primary_issue.split() if len(w) > 4]
+            # Key words from the issue should appear in the feedback.
+            # Threshold >= 3 captures basketball terms like 'arc', 'rim', 'knee', 'jump'.
+            key_words = [w.lower() for w in primary_issue.split() if len(w) >= 3]
             text = (feedback.summary + " " + feedback.detailed_analysis).lower()
             found = sum(1 for kw in key_words if kw in text)
             if key_words and found == 0:

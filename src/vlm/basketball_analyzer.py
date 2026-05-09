@@ -138,16 +138,23 @@ class BasketballVLMAnalyzer:
         elapsed_ms: float,
     ) -> CoachingFeedback:
         """Build CoachingFeedback from raw VLM dict output."""
-        # Extract fields with safe fallbacks
-        summary = str(raw.get("summary", "Analysis not available."))
-        primary_correction = str(raw.get("primary_correction", "No correction identified."))
-        detailed_analysis = str(raw.get("detailed_analysis", summary))
-        confidence = float(raw.get("confidence", MIN_VLM_CONFIDENCE))
+        # Extract fields with safe fallbacks.
+        # Use `or` instead of dict default to handle explicit null values from VLM.
+        summary = str(raw.get("summary") or "Analysis not available.")
+        primary_correction = str(raw.get("primary_correction") or "No correction identified.")
+        detailed_analysis = str(raw.get("detailed_analysis") or summary)
+
+        # Defensive confidence parsing: VLM may return null, a string, or out-of-range float.
+        try:
+            val = raw.get("confidence")
+            confidence = float(val) if val is not None else MIN_VLM_CONFIDENCE
+        except (ValueError, TypeError):
+            confidence = MIN_VLM_CONFIDENCE
         confidence = max(0.0, min(1.0, confidence))
 
-        # Parse drills
+        # Parse drills — use `or []` to handle explicit null from VLM
         drills: list[Drill] = []
-        for d in raw.get("drills", [])[:3]:  # max 3 drills
+        for d in (raw.get("drills") or [])[:3]:  # max 3 drills
             try:
                 level_str = d.get("difficulty", "intermediate")
                 try:
@@ -155,12 +162,19 @@ class BasketballVLMAnalyzer:
                 except ValueError:
                     difficulty = PlayerLevel.INTERMEDIATE
 
+                # Safely convert duration: VLM may return null, float, or non-digit string
+                raw_duration = d.get("duration_minutes")
+                try:
+                    duration_minutes = int(float(raw_duration)) if raw_duration is not None else 10
+                except (ValueError, TypeError):
+                    duration_minutes = 10
+
                 drills.append(
                     Drill(
-                        name=str(d.get("name", "Unnamed drill")),
-                        description=str(d.get("description", "")),
-                        duration_minutes=int(d.get("duration_minutes", 10)),
-                        focus=str(d.get("focus", "")),
+                        name=str(d.get("name") or "Unnamed drill"),
+                        description=str(d.get("description") or ""),
+                        duration_minutes=duration_minutes,
+                        focus=str(d.get("focus") or ""),
                         difficulty=difficulty,
                     )
                 )
