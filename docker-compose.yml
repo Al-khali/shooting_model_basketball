@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    platform: linux/amd64   # Cloud Run target; ensures MediaPipe amd64 wheels are used
+    image: shoot-ai:local
+    container_name: shoot-ai-api
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.local
+    environment:
+      PORT: "8080"
+      LOG_LEVEL: "INFO"
+    volumes:
+      # Persist model downloads + processed data across container restarts
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
