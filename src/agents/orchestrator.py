@@ -16,6 +16,7 @@ return the same result structure so callers need not change when upgrading.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import time
@@ -79,7 +80,6 @@ class ShotAnalysisPipeline:
 
         def emit(event: str, data: dict[str, Any]) -> None:
             if progress_callback is not None:
-                import contextlib  # noqa: PLC0415
                 with contextlib.suppress(Exception):
                     progress_callback(event, data)
 
@@ -106,10 +106,13 @@ class ShotAnalysisPipeline:
             elapsed_ms = time.monotonic() * 1000 - start_ms
             emit("error", {"step": "perception", "message": perception_result["error"]})
             return self._error_result(player_id, perception_result["error"], elapsed_ms)
-        emit("perception_done", {
-            "player_detected": perception_result.get("player_detected", False),
-            "total_frames": perception_result.get("total_frames", 0),
-        })
+        emit(
+            "perception_done",
+            {
+                "player_detected": perception_result.get("player_detected", False),
+                "total_frames": perception_result.get("total_frames", 0),
+            },
+        )
 
         # Step 3 — Biomechanics
         biomechanics_result = compute_biomechanics(json.dumps(perception_result))
@@ -118,10 +121,13 @@ class ShotAnalysisPipeline:
             elapsed_ms = time.monotonic() * 1000 - start_ms
             emit("error", {"step": "biomechanics", "message": biomechanics_result["error"]})
             return self._error_result(player_id, biomechanics_result["error"], elapsed_ms)
-        emit("biomechanics_done", {
-            "primary_issue": biomechanics_result.get("primary_issue"),
-            "shot_result": biomechanics_result.get("shot_result"),
-        })
+        emit(
+            "biomechanics_done",
+            {
+                "primary_issue": biomechanics_result.get("primary_issue"),
+                "shot_result": biomechanics_result.get("shot_result"),
+            },
+        )
 
         # Step 4 — VLM coaching feedback
         feedback_result = generate_coaching_feedback(
@@ -137,11 +143,14 @@ class ShotAnalysisPipeline:
             elapsed_ms = time.monotonic() * 1000 - start_ms
             emit("error", {"step": "coaching", "message": feedback_result["error"]})
             return self._error_result(player_id, feedback_result["error"], elapsed_ms)
-        emit("coaching_done", {
-            "summary": feedback_result.get("summary", ""),
-            "model_used": feedback_result.get("model_used", ""),
-            "confidence": feedback_result.get("confidence", 0.0),
-        })
+        emit(
+            "coaching_done",
+            {
+                "summary": feedback_result.get("summary", ""),
+                "model_used": feedback_result.get("model_used", ""),
+                "confidence": feedback_result.get("confidence", 0.0),
+            },
+        )
 
         # Step 5 — Training plan
         plan = build_training_plan(

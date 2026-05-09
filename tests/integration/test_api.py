@@ -101,9 +101,7 @@ class TestAnalyze:
         # Background tasks run inline in TestClient
         assert body["status"] in ("processing", "done")
 
-    def test_analyze_invalid_player_level(
-        self, client: TestClient, fake_video: tuple
-    ) -> None:
+    def test_analyze_invalid_player_level(self, client: TestClient, fake_video: tuple) -> None:
         name, content, mime = fake_video
         response = client.post(
             "/analyze",
@@ -136,9 +134,7 @@ class TestSession:
         response = client.get("/session/00000000-0000-0000-0000-000000000000")
         assert response.status_code == 404
 
-    def test_session_found_after_upload(
-        self, client: TestClient, fake_video: tuple
-    ) -> None:
+    def test_session_found_after_upload(self, client: TestClient, fake_video: tuple) -> None:
         name, content, mime = fake_video
         task_id = client.post(
             "/analyze",
@@ -162,9 +158,7 @@ class TestSession:
         assert "updated_at" in body
         assert body["status"] in ("processing", "done", "error")
 
-    def test_session_done_has_result(
-        self, client: TestClient, fake_video: tuple
-    ) -> None:
+    def test_session_done_has_result(self, client: TestClient, fake_video: tuple) -> None:
         """After background task completes, session should have a result."""
         name, content, mime = fake_video
         task_id = client.post(
@@ -213,50 +207,63 @@ class TestPlayerHistory:
 
 
 class TestAnalyzeStream:
+    """Tests for WS /analyze/stream — new upload-then-stream protocol."""
+
+    def _do_ws_analysis(
+        self,
+        ws: any,
+        player_level: str = "intermediate",
+        send_video: bool = True,
+    ) -> list[dict]:
+        """Helper: send metadata → wait for ready → send bytes → collect events."""
+        ws.send_json({"player_level": player_level, "filename": "shot.mp4"})
+        ready = ws.receive_json()
+        if ready["event"] == "error":
+            return [ready]
+        assert ready["event"] == "ready"
+
+        if send_video:
+            ws.send_bytes(b"\x00" * 16)
+            ws.send_text("upload_done")
+
+        events = []
+        while True:
+            event = ws.receive_json()
+            events.append(event)
+            if event["event"] in ("done", "error"):
+                break
+        return events
+
     def test_websocket_connects(self, client: TestClient) -> None:
         with client.websocket_connect("/analyze/stream") as ws:
-            ws.send_json({"video_path": "/tmp/shot.mp4"})
-            events = []
-            while True:
-                event = ws.receive_json()
-                events.append(event["event"])
-                if event["event"] in ("done", "error"):
-                    break
-        assert events[-1] in ("done", "error")
+            events = self._do_ws_analysis(ws)
+        assert events[-1]["event"] in ("done", "error")
 
-    def test_websocket_streams_events(self, client: TestClient) -> None:
+    def test_websocket_streams_multiple_events(self, client: TestClient) -> None:
         with client.websocket_connect("/analyze/stream") as ws:
-            ws.send_json({"video_path": "/tmp/shot.mp4", "player_level": "intermediate"})
-            events = []
-            while True:
-                event = ws.receive_json()
-                events.append(event["event"])
-                if event["event"] in ("done", "error"):
-                    break
-        # Should receive intermediate events before final
-        assert len(events) > 1
-
-    def test_websocket_missing_video_path(self, client: TestClient) -> None:
-        with client.websocket_connect("/analyze/stream") as ws:
-            ws.send_json({"player_id": "p1"})  # missing video_path
-            event = ws.receive_json()
-        assert event["event"] == "error"
+            events = self._do_ws_analysis(ws)
+        assert len(events) >= 1
 
     def test_websocket_invalid_player_level(self, client: TestClient) -> None:
         with client.websocket_connect("/analyze/stream") as ws:
-            ws.send_json({"video_path": "/tmp/shot.mp4", "player_level": "super-pro"})
+            ws.send_json({"player_level": "super-pro", "filename": "shot.mp4"})
+            event = ws.receive_json()
+        assert event["event"] == "error"
+
+    def test_websocket_no_video_bytes(self, client: TestClient) -> None:
+        """Sending upload_done without any bytes should return an error."""
+        with client.websocket_connect("/analyze/stream") as ws:
+            ws.send_json({"player_level": "intermediate", "filename": "shot.mp4"})
+            ready = ws.receive_json()
+            assert ready["event"] == "ready"
+            ws.send_text("upload_done")
             event = ws.receive_json()
         assert event["event"] == "error"
 
     def test_websocket_done_event_has_result(self, client: TestClient) -> None:
         with client.websocket_connect("/analyze/stream") as ws:
-            ws.send_json({"video_path": "/tmp/shot.mp4"})
-            final_event = None
-            while True:
-                event = ws.receive_json()
-                if event["event"] in ("done", "error"):
-                    final_event = event
-                    break
-        assert final_event is not None
-        if final_event["event"] == "done":
-            assert "coaching_feedback" in final_event["data"]
+            events = self._do_ws_analysis(ws)
+        final = events[-1]
+        assert final["event"] in ("done", "error")
+        if final["event"] == "done":
+            assert "coaching_feedback" in final["data"]

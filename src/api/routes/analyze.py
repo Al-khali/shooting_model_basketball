@@ -90,7 +90,9 @@ async def analyze(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Video file (mp4, mov, avi…)"),  # noqa: B008
     player_id: str | None = Form(None, description="Optional player identifier"),  # noqa: B008
-    player_level: str = Form("intermediate", description="beginner / intermediate / advanced / elite"),  # noqa: B008
+    player_level: str = Form(
+        "intermediate", description="beginner / intermediate / advanced / elite"
+    ),  # noqa: B008
     notes: str | None = Form(None, description="Optional coach or player notes"),  # noqa: B008
 ) -> TaskResponse:
     """
@@ -104,10 +106,16 @@ async def analyze(
         raise HTTPException(
             status_code=422,
             detail=f"Invalid player_level '{player_level}'. "
-                   f"Valid values: {[e.value for e in PlayerLevel]}",
+            f"Valid values: {[e.value for e in PlayerLevel]}",
         ) from exc
 
-    content = await file.read()
+    content = bytearray()
+    chunk_size = 1024 * 1024  # 1 MB
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        content.extend(chunk)
     suffix = Path(file.filename).suffix if file.filename else ".mp4"
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -171,37 +179,46 @@ async def analyze_stream(websocket: WebSocket) -> None:
     """
     Stream analysis progress events over WebSocket.
 
-    Connect, then send a JSON message::
+    Protocol
+    --------
+    1. Client connects and sends a JSON message with metadata::
 
-        {"video_path": "/path/to/shot.mp4", "player_id": "p42",
-         "player_level": "intermediate", "notes": null}
+        {"player_id": "p42", "player_level": "intermediate", "notes": null,
+         "filename": "shot.mp4"}
 
-    Receive a sequence of events::
+    2. Server acknowledges::
 
-        {"event": "context_loaded",   "data": {"session_count": 2}}
-        {"event": "perception_done",  "data": {"player_detected": true, "total_frames": 90}}
-        {"event": "biomechanics_done","data": {"primary_issue": "elbow flare"}}
-        {"event": "coaching_done",    "data": {"summary": "...", "model_used": "..."}}
-        {"event": "plan_done",        "data": {"drills_count": 2}}
-        {"event": "done",             "data": {<full pipeline result>}}
+        {"event": "ready", "data": {}}
+
+    3. Client sends the video file as **binary** frames (one or more chunks).
+       Signal end-of-upload with a UTF-8 text message ``"upload_done"``.
+
+    4. Server streams pipeline progress events::
+
+        {"event": "context_loaded",    "data": {"session_count": 2}}
+        {"event": "perception_done",   "data": {"player_detected": true, ...}}
+        {"event": "biomechanics_done", "data": {"primary_issue": "elbow flare"}}
+        {"event": "coaching_done",     "data": {"summary": "...", ...}}
+        {"event": "plan_done",         "data": {"drills_count": 2}}
+        {"event": "done",              "data": {<full pipeline result>}}
 
     On error::
 
-        {"event": "error", "data": {"step": "perception", "message": "..."}}
+        {"event": "error", "data": {"step": "...", "message": "..."}}
+
+    Notes
+    -----
+    The video is streamed from the client as raw bytes — the server never
+    accepts a server-side file path from the client, preventing path traversal.
     """
     await websocket.accept()
 
+    # ---- Step 1: receive metadata JSON ----
     try:
         params = await websocket.receive_json()
     except Exception:
         await websocket.send_json({"event": "error", "data": {"message": "Invalid JSON params"}})
         await websocket.close(code=1003)
-        return
-
-    video_path = params.get("video_path")
-    if not video_path:
-        await websocket.send_json({"event": "error", "data": {"message": "video_path is required"}})
-        await websocket.close()
         return
 
     try:
@@ -211,8 +228,41 @@ async def analyze_stream(websocket: WebSocket) -> None:
         await websocket.close()
         return
 
+    filename: str = params.get("filename") or "upload.mp4"
+    suffix = Path(filename).suffix or ".mp4"
+
+    await websocket.send_json({"event": "ready", "data": {}})
+
+    # ---- Step 2: receive video bytes ----
+    video_chunks: list[bytes] = []
+    try:
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.receive":
+                if message.get("bytes"):
+                    video_chunks.append(message["bytes"])
+                elif message.get("text") == "upload_done":
+                    break
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        await websocket.send_json({"event": "error", "data": {"message": "Upload failed"}})
+        await websocket.close(code=1011)
+        return
+
+    if not video_chunks:
+        await websocket.send_json({"event": "error", "data": {"message": "No video data received"}})
+        await websocket.close()
+        return
+
+    # ---- Step 3: save to temp file (server-controlled path) ----
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        for chunk in video_chunks:
+            tmp.write(chunk)
+        tmp_path = tmp.name
+
     video_input = VideoInput(
-        video_path=video_path,
+        video_path=tmp_path,
         player_id=params.get("player_id"),
         player_level=level,
         notes=params.get("notes"),
@@ -235,6 +285,8 @@ async def analyze_stream(websocket: WebSocket) -> None:
             queue.put_nowait({"event": "done", "data": result})
         except Exception as exc:
             queue.put_nowait({"event": "error", "data": {"message": str(exc)}})
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     pipeline_task = asyncio.create_task(run_pipeline())
 

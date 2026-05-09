@@ -50,9 +50,10 @@ async def health() -> HealthResponse:
         except Exception as exc:
             components[component] = HealthComponent(status="down", detail=str(exc))
 
-    overall = (
-        "degraded"
-        if any(c.status == "degraded" for c in components.values())
-        else "ok"
-    )
+    if any(c.status == "down" for c in components.values()):
+        overall = "down"
+    elif any(c.status == "degraded" for c in components.values()):
+        overall = "degraded"
+    else:
+        overall = "ok"
     return HealthResponse(status=overall, components=components)

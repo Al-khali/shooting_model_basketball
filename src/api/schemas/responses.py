@@ -27,9 +27,7 @@ class SessionResponse(BaseModel):
     player_id: str | None = None
     created_at: datetime
     updated_at: datetime
-    result: dict[str, Any] | None = Field(
-        None, description="Pipeline output when status=done"
-    )
+    result: dict[str, Any] | None = Field(None, description="Pipeline output when status=done")
     error: str | None = Field(None, description="Error message when status=error")
     processing_time_ms: float | None = None
 
