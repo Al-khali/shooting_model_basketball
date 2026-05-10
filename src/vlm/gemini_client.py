@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
+import random  # noqa: S311 — jitter for retry backoff is not a cryptographic purpose
 import time
 from typing import TYPE_CHECKING, Any
 
 from src.vlm.base import BaseVLMClient, Message, VLMConfig, VLMError, VLMParseError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +140,15 @@ class GeminiFlashClient(BaseVLMClient):
 
     def _call_with_retry(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """
-        Invoke ``fn`` with exponential backoff on transient Google API errors.
+        Invoke ``fn`` with exponential backoff + full jitter on transient errors.
 
-        Retries up to ``self.config.retry_attempts`` times. Backoff doubles
-        each attempt, capped at ``retry_max_backoff_seconds``. Non-retryable
-        exceptions propagate immediately.
+        Retries up to ``self.config.retry_attempts`` times. The base backoff
+        doubles each attempt and is capped at ``retry_max_backoff_seconds``;
+        the actual sleep is then drawn uniformly from ``[0, base]``. This
+        "full jitter" pattern (per AWS Architecture Blog) is the simplest
+        decorrelation that prevents thundering-herd retries when many
+        instances fail at the same instant (e.g. a regional Gemini quota
+        hit). Non-retryable exceptions propagate immediately.
         """
         last_exc: BaseException | None = None
         total_attempts = self.config.retry_attempts + 1
@@ -154,18 +159,23 @@ class GeminiFlashClient(BaseVLMClient):
                 last_exc = exc
                 if attempt + 1 >= total_attempts:
                     break
-                backoff = min(
+                base_backoff = min(
                     self.config.retry_backoff_seconds * (2**attempt),
                     self.config.retry_max_backoff_seconds,
                 )
+                # Full jitter — uniform on [0, base_backoff]. Decorrelates
+                # multi-instance retry storms without sacrificing the average
+                # backoff growth.
+                sleep_for = random.uniform(0, base_backoff)  # noqa: S311
                 logger.warning(
-                    "Gemini transient error (attempt %d/%d): %s — retrying in %.1fs",
+                    "Gemini transient error (attempt %d/%d): %s — retrying in %.2fs (base %.1fs, jittered)",
                     attempt + 1,
                     total_attempts,
                     exc,
-                    backoff,
+                    sleep_for,
+                    base_backoff,
                 )
-                time.sleep(backoff)
+                time.sleep(sleep_for)
         # All retries exhausted — raise as VLMError so callers get a stable type.
         assert last_exc is not None  # noqa: S101 — invariant of the loop above
         raise VLMError(
@@ -179,17 +189,24 @@ class GeminiFlashClient(BaseVLMClient):
     def _dispatch(
         self,
         model: Any,
-        gemini_messages: Iterable[dict],
+        gemini_messages: list[dict],
     ) -> Any:
-        """Single-shot call to Gemini — used as the retry-wrapped unit."""
-        msgs = list(gemini_messages)
-        if len(msgs) == 1:
+        """
+        Single-shot call to Gemini — used as the retry-wrapped unit.
+
+        Takes a *list* (not a one-shot iterator/generator) on purpose: the
+        retry layer may call this multiple times, and a generator would be
+        exhausted after the first attempt, leaving subsequent retries with
+        no input. Callers must materialize their messages before reaching
+        this method (which `_messages_to_gemini` already does).
+        """
+        if len(gemini_messages) == 1:
             return model.generate_content(
-                msgs[0]["parts"][0],
+                gemini_messages[0]["parts"][0],
                 request_options=self._request_options(),
             )
-        chat = model.start_chat(history=msgs[:-1])  # type: ignore[arg-type]
-        last = msgs[-1]["parts"][0]
+        chat = model.start_chat(history=gemini_messages[:-1])  # type: ignore[arg-type]
+        last = gemini_messages[-1]["parts"][0]
         return chat.send_message(last, request_options=self._request_options())
 
     def complete(self, messages: list[Message]) -> str:
@@ -215,11 +232,14 @@ class GeminiFlashClient(BaseVLMClient):
             raise VLMError("No user messages provided.")
         try:
             response = self._call_with_retry(self._dispatch, self._json_model, gemini_messages)
+            # `response.text` itself can raise on safety-blocked completions
+            # (the SDK exposes the block reason via attribute access). Keep
+            # it inside the try so the VLMError wrapping contract holds.
+            raw = response.text.strip()
         except VLMError:
             raise
         except Exception as exc:
             raise VLMError(f"Gemini API error: {exc}") from exc
-        raw = response.text.strip()
         try:
             return json.loads(raw)
         except json.JSONDecodeError as parse_exc:
