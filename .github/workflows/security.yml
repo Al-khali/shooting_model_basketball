@@ -60,21 +60,46 @@ jobs:
   container-scan:
     name: Container scan (Trivy)
     runs-on: ubuntu-latest
-    # Only on PRs and main pushes (not weekly cron — image rebuild not scheduled)
-    if: github.event_name != 'schedule'
+    # Runs on push, PR, and weekly cron — the cron is exactly when new CVEs are
+    # found in unchanged images (OS base, transitive lib updates upstream).
+    permissions:
+      contents: read
+      security-events: write # Upload SARIF to GitHub Security tab
     steps:
       - uses: actions/checkout@v4
 
       - name: Build image for scanning
         run: docker build --platform linux/amd64 -t shoot-ai:scan .
 
-      - name: Run Trivy container scan
-        uses: aquasecurity/trivy-action@master
+      # Step 1 — fail the job on HIGH/CRITICAL CVEs (gating). MEDIUM is reported
+      # only via SARIF upload below so the developer sees them in the Security
+      # tab without blocking CI on noisy lower-severity findings.
+      - name: Trivy container scan (gating — fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: "shoot-ai:scan"
           format: "table"
           exit-code: "1"
           ignore-unfixed: true
           vuln-type: "os,library"
-          severity: "CRITICAL"
-        # Fail CI on CRITICAL CVEs only — MEDIUM/HIGH logged but don't block
+          severity: "HIGH,CRITICAL"
+
+      # Step 2 — always emit SARIF (even when the gating step failed) so every
+      # finding lands in the GitHub Security tab for triage history.
+      - name: Trivy container scan (SARIF report)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "shoot-ai:scan"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "MEDIUM,HIGH,CRITICAL"
+
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: "trivy-container"
