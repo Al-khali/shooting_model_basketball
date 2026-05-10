@@ -98,7 +98,28 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 
 ---
 
-## 📋 Phase 6 — Edge & Mobile *(vision moyen terme)*
+## 🚀 Programme d'enrichissement v2.0 *(en cours — démarré 2026-05-10)*
+
+**Objectif :** post-audit v1.0.0, enrichir la plateforme sur 7 tracks parallèles vers v2.0 (3-6 semaines). Voir [`BACKLOG.md`](BACKLOG.md) pour le détail des tickets et le plan complet dans `~/.claude/plans/`.
+
+| Track | Focus | Priorité | État |
+|-------|-------|----------|------|
+| Track 0 | Stabilisation (Trivy, deploy, error handling, VLM resilience) | P0 | 🟡 1/3 PRs |
+| Track 1 | Challenge qualif tech + ADR | P1 | 📋 |
+| Track 2 | Reliability + observability (OTel, Firestore, idempotency, SLO) | P1 | 📋 |
+| Track 3 | Security hardening (Cosign/SLSA, rate limit, video validation, secret rotation) | P1 | 📋 |
+| Track 4 | Code quality + tests (VLM, hypothesis biomech, e2e DVC, eval golden) | P2 | 📋 |
+| Track 5 | Phase 6 Edge & Mobile (ONNX, TensorRT, iOS/Android SDK, hybrid) | P2 | 📋 |
+| Track 6 | Architecture (Pub/Sub async, live streaming, DDD bounded contexts) | P3 | 📋 |
+| Track 7 | DX (uv cache CI, pre-commit, Renovate) | P3 | 📋 |
+
+- [x] **T0-1** Trivy hardening — pin `@v0.36.0`, schedule scan, HIGH+CRITICAL gating, SARIF upload (PR #32 / v1.0.1)
+- [ ] **T0-2** Deploy job failures (2026-05-09) — diagnose + fix
+- [ ] **T0-3** Error handling specificity + VLM retry/timeout
+
+---
+
+## 📋 Phase 6 — Edge & Mobile *(vision moyen terme — recouvre Track 5 du programme v2.0)*
 
 **Objectif :** inférence on-device pour usage terrain sans cloud.
 

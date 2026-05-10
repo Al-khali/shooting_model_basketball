@@ -4,6 +4,21 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.1] — Track 0 (stabilisation): Trivy hardening (2026-05)
+
+### Fixed
+- `.github/workflows/security.yml` — `container-scan` job hardened (4 misconfigurations identified during the v2.0 enrichment audit):
+  - **Pin** `aquasecurity/trivy-action@v0.36.0` (was `@master` → non-deterministic across runs)
+  - **Run on schedule** — removed `if: github.event_name != 'schedule'`. Trivy now executes on push, PR, **and** the weekly Monday 08:00 UTC cron (which is precisely when new CVEs land on an unchanged image)
+  - **Widen severity gate** to `HIGH,CRITICAL` (was `CRITICAL` only — was missing actively-exploited HIGH OS CVEs); kept `ignore-unfixed: true` to avoid blocking on CVEs without an upstream patch
+  - **SARIF upload** — second Trivy step (`format: sarif`, MEDIUM+HIGH+CRITICAL) feeds `github/codeql-action/upload-sarif@v3` so every finding is visible in the GitHub Security tab; runs with `if: always()` so the report lands even when the gating step fails
+- Job-level `permissions: security-events: write` added (required by `upload-sarif`)
+
+### Notes
+- Gemini Code Assist replied: *"Gemini is unable to generate a review for this pull request due to the file types involved not being currently supported."* — no findings to challenge per CLAUDE.md §challenge protocol; treated as silent acquiescement after CI passed
+- All 13 CI checks green on PR #32, including container scan in 4m18s
+- Dependabot alert #228 surfaced during this PR (CVE-2025-69872 — DiskCache unsafe deserialization, MEDIUM, **no upstream patch**, transitive via uv.lock) — to be triaged in a follow-up Track 0 ticket
+
 ## [1.0.0] — Phase 5b: Complete — smoke test script (2026-05)
 
 ### Added
