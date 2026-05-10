@@ -75,7 +75,7 @@ jobs:
       # only via SARIF upload below so the developer sees them in the Security
       # tab without blocking CI on noisy lower-severity findings.
       - name: Trivy container scan (gating — fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: "shoot-ai:scan"
           format: "table"
@@ -88,7 +88,7 @@ jobs:
       # finding lands in the GitHub Security tab for triage history.
       - name: Trivy container scan (SARIF report)
         if: always()
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: "shoot-ai:scan"
           format: "sarif"
