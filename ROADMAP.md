@@ -114,7 +114,7 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 | Track 7 | DX (uv cache CI, pre-commit, Renovate) | P3 | 📋 |
 
 - [x] **T0-1** Trivy hardening — pin `@v0.36.0`, schedule scan, HIGH+CRITICAL gating, SARIF upload (PR #32 / v1.0.1)
-- [ ] **T0-2** Deploy job failures (2026-05-09) — diagnose + fix
+- [x] **T0-2** Deploy job preflight — graceful skip when GCP secrets missing, diagnostic of zero-secret repo state (PR #33 / v1.0.2)
 - [ ] **T0-3** Error handling specificity + VLM retry/timeout
 
 ---

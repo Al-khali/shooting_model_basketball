@@ -4,6 +4,22 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.2] — Track 0 (stabilisation): deploy preflight skip (2026-05)
+
+### Fixed
+- `.github/workflows/deploy.yml` — graceful skip when GCP secrets are missing (PR #33)
+  - Diagnosed root cause of the 6 consecutive deploy failures since 2026-05-09 17:15: the repository had **zero** GitHub Secrets configured (`gh api repos/.../actions/secrets` → `total_count: 0`). The Workload Identity Federation auth step rejected the empty `workload_identity_provider` input
+  - New `preflight` job verifies `GCP_WORKLOAD_IDENTITY_PROVIDER` + `GCP_SERVICE_ACCOUNT` + `GCP_PROJECT_ID` via `env:` (safe pattern — never interpolated directly in the shell), exposes `ready=true|false` as job output
+  - `build-and-push`, `deploy`, `smoke-test` gain `needs: preflight` + `if: needs.preflight.outputs.ready == 'true'`
+  - Missing secrets → workflow runs green with a job summary listing the bootstrap procedure (run `infra/scripts/bootstrap.sh` + `terraform apply` + `gh secret set`); a `::warning::` annotation surfaces the skip
+  - All four downstream `${{ secrets.GCP_PROJECT_ID }}` shell interpolations refactored to `env:` passing while at it (defense-in-depth pattern)
+- First deploy run **green** since the workflow was introduced (run 25625550032: preflight ✅, others skipped)
+
+### Notes
+- Bootstrap remains a manual operator task (interactive `gcloud auth login` cannot run from CI); see CONTRIBUTING.md for the full procedure
+- Once secrets are set, the next push to `main` will trigger a real deploy unchanged
+- Forks that don't deploy will see clean green runs instead of red on every push
+
 ## [1.0.1] — Track 0 (stabilisation): Trivy hardening (2026-05)
 
 ### Fixed

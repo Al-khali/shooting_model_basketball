@@ -13,7 +13,7 @@ Post-audit v1.0.0 : 7 tracks parallèles pour passer la plateforme à la prochai
 ### Track 0 — Stabilisation *(P0 — 2-3 jours)*
 
 - [x] **T0-1** Trivy hardening — pin `@v0.36.0`, schedule cron, HIGH+CRITICAL gating, SARIF upload → **livré v1.0.1 (PR #32)**
-- [ ] **T0-2** Diagnose & fix deploy job failures (2026-05-09 17:15-17:29) — `gh run view --log-failed`, root cause Terraform / WIF / Cloud Run
+- [x] **T0-2** Deploy preflight skip — diagnosed: zero secrets configured (`gh api .../actions/secrets` → 0). Fix: preflight job + `if: needs.preflight.outputs.ready == 'true'` on build/deploy/smoke → **livré v1.0.2 (PR #33)**. ⚠️ Bootstrap manuel encore requis (operator runs `infra/scripts/bootstrap.sh` + `terraform apply` + `gh secret set`)
 - [ ] **T0-3** Resserrer 3 `except Exception:` (analyze.py:219,248 + video_pipeline.py:246) + `VLMConfig.retry_attempts/timeout_s` appliqué dans `gemini_client`
 - [ ] **T0-4 (follow-up)** Triage Dependabot alert #228 — CVE-2025-69872 DiskCache (MEDIUM, transitive, no upstream patch). Décider : ignore-rule documenté, downstream pinning, ou retrait dep si possible
 
