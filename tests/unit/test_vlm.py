@@ -424,3 +424,131 @@ class TestVLMClientContract:
     def test_vlm_parse_error_is_vlm_error(self) -> None:
         with pytest.raises(VLMError):
             raise VLMParseError("parse failure")
+
+
+# ---------------------------------------------------------------------------
+# Tests: VLMConfig retry defaults
+# ---------------------------------------------------------------------------
+
+
+class TestVLMConfigRetry:
+    def test_retry_defaults(self) -> None:
+        cfg = VLMConfig()
+        assert cfg.retry_attempts == 3
+        assert cfg.retry_backoff_seconds == 1.0
+        assert cfg.retry_max_backoff_seconds == 16.0
+
+    def test_retry_overridable(self) -> None:
+        cfg = VLMConfig(retry_attempts=5, retry_backoff_seconds=0.5, retry_max_backoff_seconds=4.0)
+        assert cfg.retry_attempts == 5
+        assert cfg.retry_backoff_seconds == 0.5
+        assert cfg.retry_max_backoff_seconds == 4.0
+
+
+# ---------------------------------------------------------------------------
+# Tests: GeminiFlashClient retry behavior
+#
+# We don't need a real google-generativeai install — we patch sys.modules so
+# the lazy import inside __init__ resolves to a stub. Tests target the
+# `_call_with_retry` helper directly: that's where the resilience logic lives,
+# and it's the right unit boundary (avoids coupling to SDK internals).
+# ---------------------------------------------------------------------------
+
+
+def _make_gemini_client(monkeypatch: pytest.MonkeyPatch, **cfg_kwargs: object) -> object:
+    """Build a GeminiFlashClient with a stubbed google.generativeai SDK."""
+    import sys
+    from unittest.mock import MagicMock
+
+    fake_genai = MagicMock()
+    fake_genai.GenerativeModel.return_value = MagicMock()
+    monkeypatch.setitem(sys.modules, "google", MagicMock())
+    monkeypatch.setitem(sys.modules, "google.generativeai", fake_genai)
+
+    # Import here so the patched sys.modules takes effect.
+    from src.vlm.gemini_client import GeminiFlashClient  # noqa: PLC0415
+
+    # Tight backoff so tests stay fast — 0.001s instead of 1s.
+    base_kwargs: dict[str, object] = {
+        "retry_attempts": 2,
+        "retry_backoff_seconds": 0.001,
+        "retry_max_backoff_seconds": 0.01,
+    }
+    base_kwargs.update(cfg_kwargs)
+    config = VLMConfig(**base_kwargs)  # type: ignore[arg-type]
+    return GeminiFlashClient(api_key="test-key", config=config)
+
+
+class TestGeminiClientRetry:
+    def test_retries_on_transient_then_succeeds(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from src.vlm import gemini_client  # noqa: PLC0415
+
+        # Substitute a known retryable type so we don't depend on google-api-core.
+        monkeypatch.setattr(gemini_client, "_RETRYABLE_EXCEPTIONS", (RuntimeError,))
+
+        client = _make_gemini_client(monkeypatch, retry_attempts=3)
+
+        attempts = {"n": 0}
+
+        def flaky() -> str:
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RuntimeError("transient blip")
+            return "ok"
+
+        result = client._call_with_retry(flaky)  # type: ignore[attr-defined]
+        assert result == "ok"
+        assert attempts["n"] == 3
+
+    def test_raises_vlmerror_after_attempts_exhausted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.vlm import gemini_client  # noqa: PLC0415
+
+        monkeypatch.setattr(gemini_client, "_RETRYABLE_EXCEPTIONS", (RuntimeError,))
+
+        client = _make_gemini_client(monkeypatch, retry_attempts=2)
+
+        def always_transient() -> None:
+            raise RuntimeError("never recovers")
+
+        with pytest.raises(VLMError, match="3 attempts"):
+            client._call_with_retry(always_transient)  # type: ignore[attr-defined]
+
+    def test_non_retryable_propagates_immediately(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from src.vlm import gemini_client  # noqa: PLC0415
+
+        monkeypatch.setattr(gemini_client, "_RETRYABLE_EXCEPTIONS", (RuntimeError,))
+
+        client = _make_gemini_client(monkeypatch)
+
+        attempts = {"n": 0}
+
+        def auth_failure() -> None:
+            attempts["n"] += 1
+            raise PermissionError("invalid api key")
+
+        with pytest.raises(PermissionError):
+            client._call_with_retry(auth_failure)  # type: ignore[attr-defined]
+        assert attempts["n"] == 1, "non-retryable errors must not be retried"
+
+    def test_first_call_succeeds_no_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from src.vlm import gemini_client  # noqa: PLC0415
+
+        monkeypatch.setattr(gemini_client, "_RETRYABLE_EXCEPTIONS", (RuntimeError,))
+
+        client = _make_gemini_client(monkeypatch)
+
+        attempts = {"n": 0}
+
+        def happy() -> int:
+            attempts["n"] += 1
+            return 42
+
+        assert client._call_with_retry(happy) == 42  # type: ignore[attr-defined]
+        assert attempts["n"] == 1
+
+    def test_request_options_carries_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = _make_gemini_client(monkeypatch)
+        opts = client._request_options()  # type: ignore[attr-defined]
+        assert opts == {"timeout": client.config.timeout_seconds}  # type: ignore[attr-defined]

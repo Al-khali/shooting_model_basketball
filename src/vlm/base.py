@@ -27,6 +27,12 @@ class VLMConfig:
     temperature: float = 0.3
     max_tokens: int = 2048
     timeout_seconds: float = 30.0
+    # Resilience: retry on transient errors (network blips, rate limits, 5xx).
+    # Total attempts = 1 + retry_attempts. With backoff = 1.0s and 3 retries,
+    # the worst-case wall time is ~1+2+4+8 = 15s of waits + 4 timeouts.
+    retry_attempts: int = 3
+    retry_backoff_seconds: float = 1.0
+    retry_max_backoff_seconds: float = 16.0
     # Model-specific extras (e.g. safety settings)
     extra: dict = field(default_factory=dict)
 

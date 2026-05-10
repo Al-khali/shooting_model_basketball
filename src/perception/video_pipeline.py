@@ -243,7 +243,13 @@ class VideoProcessor:
         for frame_idx, ts_ms, frame in sampled:
             try:
                 keypoints = self._estimator.estimate(frame)
-            except Exception:
+            except (cv2.error, RuntimeError, ValueError, IndexError):
+                # cv2.error: OpenCV cannot process the frame (corrupt buffer,
+                # unsupported colorspace). RuntimeError: torch/CUDA fault inside
+                # MediaPipe/Ultralytics. ValueError: shape mismatch on input.
+                # IndexError: empty / malformed keypoint output. All four are
+                # per-frame failures we want to skip — anything else (e.g.
+                # MemoryError, KeyboardInterrupt) should propagate.
                 logger.exception("Pose estimation failed on frame %d", frame_idx)
                 continue
 

@@ -18,6 +18,7 @@ WS /analyze/stream
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import tempfile
 from pathlib import Path
@@ -216,7 +217,14 @@ async def analyze_stream(websocket: WebSocket) -> None:
     # ---- Step 1: receive metadata JSON ----
     try:
         params = await websocket.receive_json()
-    except Exception:
+    except WebSocketDisconnect:
+        # Client closed before sending params — nothing to do.
+        return
+    except (json.JSONDecodeError, UnicodeDecodeError, RuntimeError) as exc:
+        # JSONDecodeError: malformed body. UnicodeDecodeError: binary frame
+        # where text was expected. RuntimeError: starlette raises this when
+        # the connection is in a wrong state (e.g. closed mid-receive).
+        logger.warning("WebSocket params receive failed: %s", exc)
         await websocket.send_json({"event": "error", "data": {"message": "Invalid JSON params"}})
         await websocket.close(code=1003)
         return
@@ -245,7 +253,12 @@ async def analyze_stream(websocket: WebSocket) -> None:
                     break
     except WebSocketDisconnect:
         return
-    except Exception:
+    except (RuntimeError, OSError, ConnectionError) as exc:
+        # RuntimeError: starlette state error mid-stream. OSError /
+        # ConnectionError: underlying socket failure. Anything else (logic
+        # bug, missing key in message dict) should bubble up as a 500 so
+        # the regression is visible rather than silently masked.
+        logger.warning("WebSocket video receive failed: %s", exc)
         await websocket.send_json({"event": "error", "data": {"message": "Upload failed"}})
         await websocket.close(code=1011)
         return
