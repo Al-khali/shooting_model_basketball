@@ -16,13 +16,13 @@ resource "google_cloud_run_v2_service" "api" {
   # Allow unauthenticated requests — auth handled by X-API-Key middleware
   ingress = "INGRESS_TRAFFIC_ALL"
 
-  # POC: Terraform-managed iteration replaces images frequently. The default
-  # `deletion_protection = true` blocks destroy/recreate flows on image_tag
-  # change, which would force operators to mutate state manually. For prod,
-  # flip this back to true and rely on `terraform apply` updating in place
-  # (image change normally does NOT need destroy/recreate — but other field
-  # changes do, e.g. moving region or renaming).
-  deletion_protection = false
+  # Deletion protection is environment-driven: enabled in prod to guard
+  # against accidental destroy, disabled elsewhere so the POC can iterate
+  # freely. The default `true` blocks destroy/recreate flows on field
+  # changes that force a replacement (e.g. moving region, renaming);
+  # explicit `false` in dev avoids the "cannot destroy without setting
+  # deletion_protection=false" loop that bit us during T0-6 bootstrap.
+  deletion_protection = var.environment == "prod"
 
   template {
     service_account = google_service_account.cloud_run.email
