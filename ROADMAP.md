@@ -115,7 +115,10 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 
 - [x] **T0-1** Trivy hardening — pin `@v0.36.0`, schedule scan, HIGH+CRITICAL gating, SARIF upload (PR #32 / v1.0.1)
 - [x] **T0-2** Deploy job preflight — graceful skip when GCP secrets missing, diagnostic of zero-secret repo state (PR #33 / v1.0.2)
-- [ ] **T0-3** Error handling specificity + VLM retry/timeout
+- [x] **T0-5** End-to-end local validation — 6 silent bugs uncovered (leak, status incohérent, no media validation, version désynchro, perception import path cassé, API VideoProcessor mal utilisée) + `scripts/local_e2e.sh` automation + VideoProcessor caching (PR #35 / v1.0.3)
+- [ ] **T0-3** (en pause) Error handling specificity + VLM retry/timeout — PR #34 à ré-ouvrir contre le baseline T0-5 sain
+- [ ] **T0-6** Bootstrap GCP réel — `infra/scripts/bootstrap.sh` + `terraform apply` (étape opérateur humain, jamais exécutée par les agents précédents)
+- [ ] **T0-4** Dependabot alert #228 — CVE-2025-69872 DiskCache MEDIUM, pas de patch upstream, à documenter via ignore-rule justifiée
 
 ---
 

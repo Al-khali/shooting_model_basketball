@@ -4,6 +4,46 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.3] — Track 0 (stabilisation): end-to-end validation + 6 silent bugs (2026-05-12)
+
+**Course-correction critique** : avant ce PR la stack n'avait **jamais** tourné end-to-end avec un vrai POST `/analyze`. Le premier run local (uvicorn + ffmpeg stub video + curl) a révélé 6 bugs que les 182 tests unitaires verts n'ont pas attrapés, parce que les tools tombaient en silence sur des stubs deferred-import.
+
+### Fixed
+- **Bug A — leak d'exception text dans le champ user-facing** (`coach_tools.py`)
+  Le stub fallback retournait `detailed_analysis: "GEMINI_API_KEY environment variable not set."`. Remplacé par des codes d'erreur stables (`vlm_unavailable`, `coaching_failed:VLMError`) ; le texte d'exception est loggé mais jamais retourné dans le body.
+- **Bug B — status=done malgré dégradation silencieuse** (`coach_tools.py`, `orchestrator.py`)
+  `_stub_coaching_feedback` retournait dict avec `error` ET `summary` → orchestrator guard (`not feedback.get("summary")`) évaluait False → pipeline reportait `done` avec le leak Bug A. Stub supprimé : strict mode (`status=error, on bloque`), retour `{"error": ..., "player_id": ...}` sans `summary`, guard simplifié à `if "error" in feedback_result`.
+- **Bug C — pas de validation média en entrée** (`orchestrator.py`)
+  Une vidéo synthétique 2s sans humain donnait `summary: "Analysis complete. Focus on your release mechanics"`. Orchestrator valide maintenant `perception_result.player_detected AND key_frames` avant de continuer ; sinon `error: no_shootable_content`.
+- **Bug D — `/health.version` hardcodé "0.5.0"** (`responses.py`)
+  Désynchro 3 sources (pyproject `0.1.0`, responses `0.5.0`, CHANGELOG `1.0.2`). Résolu dynamiquement via `importlib.metadata.version("shoot-ai")` au startup avec fallback `0.0.0+unknown`. `pyproject.toml` bumpé à `1.0.3`.
+- **Bug E — perception jamais réellement appelée** (`perception_tools.py`)
+  L34 importait `from src.perception.video_processor import VideoProcessor` mais le fichier est `video_pipeline.py`. Le `# type: ignore[import]` cachait le typo à mypy. **Depuis Phase 3, chaque `extract_shot_frames` tombait en ImportError → stub avec `player_detected: True` fabriqué.** Fixé.
+- **Bug F — API VideoProcessor mal utilisée** (`perception_tools.py`)
+  Même après le fix de l'import : `VideoProcessor(video_path)` (constructor prend `estimator + config`, pas le path) + `.extract_frames()` (la méthode est `.process(video_path)` qui retourne `PerceptionOutput` complet incluant shot phases). Module réécrit avec l'API correcte (`VideoProcessor().process(video_path).model_dump()`).
+
+### Performance
+- **VideoProcessor cached en singleton module-level** (`perception_tools.py`) — finding Gemini sur le PR initial. Premier call paie le coût de chargement YOLO/MediaPipe (~500ms-2s, 6MB pour yolo11n) ; calls suivants réutilisent les weights chauds. Pattern double-check locking avec `threading.Lock` car FastAPI exécute les tools bloquants dans un worker pool (`anyio.to_thread.run_sync`) — deux requêtes `/analyze` concurrentes peuvent racer sur cache froid.
+
+### Added
+- **`scripts/local_e2e.sh`** — script de validation end-to-end automatisé : spawn uvicorn (port 8088), génère un stub mp4 via ffmpeg, exécute POST `/analyze` + polling `/session`, asserte `status=error` en mode no-key et **vérifie que la string "GEMINI_API_KEY" n'apparaît pas dans le body** (régression check Bug A). Ce script doit tourner avant tout PR qui touche le pipeline.
+
+### Changed
+- **Pydantic `HealthResponse.version`** : `default=APP_VERSION` direct au lieu de `default_factory=lambda` (finding Gemini — string immuable, lambda inutile à chaque instantiation).
+- **`.gitignore`** : ajout `*.pt|*.pth|*.onnx` au niveau root (ultralytics dépose des weights dans CWD au premier call ; auparavant seulement `models/*.pt` était ignoré).
+
+### Tests
+- **183 tests** (vs 182 avant) — `test_health_version` ne pin plus le literal `"0.5.0"` ; `TestPerceptionTools` et `TestCoachTools` réécrits pour asserter les codes d'erreur stables et l'absence de leak (`Traceback`, `/tmp/`, `/Users/`, `\n` non présents) ; `TestShotAnalysisPipeline` stub les 3 tools à la frontière orchestrator via monkeypatch (les anciens tests passaient uniquement grâce au stub silencieux — c'était précisément le bug) ; nouveau test `test_analyze_returns_error_when_video_missing` exerce explicitement le chemin error.
+
+### Notes Gemini Code Assist
+- 2 findings MEDIUM sur le PR initial, **tous ACCEPTED** (cache VideoProcessor + `default` vs `default_factory`)
+- Validation finale Gemini : *"L'implémentation du pattern double-check locking pour le `VideoProcessor` est tout à fait appropriée pour garantir la sécurité dans un environnement FastAPI concurrent, et la gestion dynamique de la version via `importlib.metadata` est une excellente pratique. Le script `local_e2e.sh` est un ajout précieux. Vous avez mon feu vert pour le merge."*
+
+### Hors scope (follow-up Track 0)
+- **T0-3** (PR #34 narrow exceptions + VLM retry) reste en draft — à ré-ouvrir contre ce baseline sain (les 4 fixes Gemini sur le retry path restent valides)
+- **T0-6** (nouveau) : exécuter le bootstrap GCP réel (`infra/scripts/bootstrap.sh` + `terraform apply`) — étape opérateur humain, jamais effectuée
+- **T0-4** : Dependabot alert #228 (CVE-2025-69872 DiskCache, MEDIUM, pas de patch upstream)
+
 ## [1.0.2] — Track 0 (stabilisation): deploy preflight skip (2026-05)
 
 ### Fixed
