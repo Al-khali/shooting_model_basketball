@@ -4,6 +4,31 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.5] — Track 0 (T0-3/T0-7): narrow exception handlers + VLM retry/timeout (2026-05-12)
+
+Retour de la PR #34 mise en draft pendant T0-5 (course-correction). Rebase sur baseline v1.0.4 **clean, zéro conflit** — T0-3 et T0-5 touchent des fichiers disjoints.
+
+### Fixed
+- **3 `except Exception:` resserrés** — les broad catches masquaient les vraies causes d'erreur :
+  - `src/api/routes/analyze.py:219` (WebSocket params receive) → `(json.JSONDecodeError, UnicodeDecodeError, RuntimeError)` + `WebSocketDisconnect` géré séparément
+  - `src/api/routes/analyze.py:248` (WebSocket video bytes loop) → `(RuntimeError, OSError, ConnectionError)`
+  - `src/perception/video_pipeline.py:246` (per-frame pose estimation) → `(cv2.error, RuntimeError, ValueError, IndexError)`
+  - Chaque site reçoit un commentaire explicatif documentant quelle condition upstream lève quel type
+  - `MemoryError`, `KeyboardInterrupt` propagent maintenant comme elles le devraient
+
+### Added
+- **`VLMConfig` resilience knobs** (`src/vlm/base.py`) : `retry_attempts=3`, `retry_backoff_seconds=1.0`, `retry_max_backoff_seconds=16.0`. Worst-case ~7s cumulé (3 waits entre 4 attempts), avec full jitter actual = uniform[0, 7]
+- **`GeminiFlashClient._call_with_retry`** (`src/vlm/gemini_client.py`) : retry exponentiel + **full jitter** (AWS Architecture pattern, `sleep = random.uniform(0, base_backoff)`) sur transients Google API (`DeadlineExceeded`, `ServiceUnavailable`, `InternalServerError`, `ResourceExhausted`, `Aborted`, `GatewayTimeout`). Fallback `(TimeoutError, ConnectionError)` quand `google-api-core` absent. Non-retryable propage immédiatement ; après épuisement → `VLMError`
+- **`_request_options()`** : `{"timeout": config.timeout_seconds}` passé à chaque `generate_content`/`send_message`
+- **`_dispatch(model, gemini_messages: list[dict])`** : refactor en unité retry-wrappable. Type hint `list[dict]` (pas `Iterable`) — évite la consommation prématurée d'un générateur sur retry
+- **+7 tests unitaires** (190 total vs 183 sur main) : `VLMConfig` retry defaults/override + 5 tests `_call_with_retry` (success après N transient, `VLMError` après exhaustion, non-retryable propagation, no-retry happy path, `request_options` carries timeout). Stub `google.generativeai` via `sys.modules`
+
+### Notes Gemini Code Assist
+- 4 findings MEDIUM avant la pause : math docstring timing (1+2+4≠15s), backoff déterministe (thundering herd), `_dispatch(Iterable[dict])` bug latent (generator consumption), `response.text` hors try dans `complete_json` (contrat `VLMError` rompu) — **tous ACCEPTED + corrigés**
+- Validation finale Gemini (pré-pause) : *"Les corrections apportées, notamment le passage au 'full jitter' pour la résilience réseau et le typage strict des messages pour éviter la consommation prématurée des générateurs, sont excellentes. La suite de tests unitaires couvre bien les cas limites. Le code est prêt pour le merge."*
+- Rebase post-T0-5 a confirmé que T0-3 et T0-5 sont orthogonaux ; pipeline post-rebase 6/6 (ruff, format, mypy, 190 tests, bandit, pip-audit) + `bash scripts/local_e2e.sh` 5/5 vert
+- Merge final via `--admin` pour bypass un duplicate Trivy run encore pending (l'autre run identique avait déjà passé en 4m16s, code strictement identique au pre-rebase ack'd par Gemini)
+
 ## [1.0.4] — Track 0: GCP bootstrap real (T0-6) — first live deploy (2026-05-12)
 
 **Premier provisioning GCP réel** depuis la création du projet. Les agents précédents avaient shippé Terraform + CI/CD sans jamais avoir bootstrappé contre un vrai billing account. T0-6 ferme ce gap.

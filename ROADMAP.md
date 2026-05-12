@@ -117,7 +117,7 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 - [x] **T0-2** Deploy job preflight — graceful skip when GCP secrets missing, diagnostic of zero-secret repo state (PR #33 / v1.0.2)
 - [x] **T0-5** End-to-end local validation — 6 silent bugs uncovered + `scripts/local_e2e.sh` automation + VideoProcessor caching (PR #35 / v1.0.3)
 - [x] **T0-6** Bootstrap GCP réel — projet `shoot-ai-poc` live à `https://shoot-ai-dev-chf52ondba-uc.a.run.app`, 25 ressources Terraform créées, 5 GitHub secrets configurés, `deletion_protection` environment-conditional (PR #36 / v1.0.4)
-- [ ] **T0-3** (en pause) Error handling specificity + VLM retry/timeout — PR #34 à ré-ouvrir contre baseline sain
+- [x] **T0-3/T0-7** Narrow exceptions (3 sites) + VLM retry/timeout avec full jitter (AWS pattern) + 7 tests unitaires retry. Rebase clean post-T0-5 (PR #34 / v1.0.5). 190 tests total.
 - [ ] **T0-4** Dependabot alert #228 — CVE-2025-69872 DiskCache MEDIUM, pas de patch upstream, ignore-rule à documenter
 - [ ] **T0-8** (nouveau, follow-up T0-6) `/unknown` route retourne 401 au lieu de 404 — middleware auth runs before routing, anti-enumeration vs UX trade-off à arbitrer
 - [ ] **T0-9** (nouveau, follow-up T0-6) YOLO weights baking dans l'image Docker — chaque cold-start télécharge ~6MB, ralentit le 1er /analyze post-scaling
