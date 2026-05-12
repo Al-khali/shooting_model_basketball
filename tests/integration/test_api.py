@@ -57,8 +57,16 @@ class TestHealth:
         assert body["status"] in ("ok", "degraded")
 
     def test_health_version(self, client: TestClient) -> None:
+        # T0-5 Bug D: version is now resolved dynamically from
+        # importlib.metadata("shoot-ai") at import time, not hardcoded.
+        # Assert a non-empty PEP-440-ish string instead of pinning to a
+        # literal that would drift every release.
+        from src.api.schemas.responses import APP_VERSION
+
         body = client.get("/health").json()
-        assert body["version"] == "0.5.0"
+        assert body["version"], "version must be non-empty"
+        assert body["version"] == APP_VERSION
+        assert body["version"] != "0.5.0", "old hardcoded literal must not return"
 
     def test_health_components_present(self, client: TestClient) -> None:
         body = client.get("/health").json()

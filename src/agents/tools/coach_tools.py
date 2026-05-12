@@ -1,7 +1,16 @@
 """Tool function: generate personalized basketball coaching feedback via VLM.
 
 Wraps the AI Shoot Phase 2 BasketballVLMAnalyzer (Gemini Flash).
-Uses deferred imports so the module loads in CI without API keys.
+Uses deferred imports so the module loads in CI without VLM SDK.
+
+Failure mode (T0-5 course-correction): when the VLM call fails for any
+reason (missing API key, network outage, safety-filter block, …) this
+function returns ``{"error": "<reason>"}`` **without** a ``summary`` key,
+so the orchestrator can detect the failure and surface ``status=error``
+to the API caller. Returning a heuristic stub with a populated ``summary``
+caused the orchestrator to report ``status=done`` for a degraded analysis
+(Bug B) and leaked the raw exception text into the user-facing
+``detailed_analysis`` field (Bug A).
 """
 
 from __future__ import annotations
@@ -36,13 +45,14 @@ def generate_coaching_feedback(
         previous_drills_json: JSON list of drills to avoid repeating.
 
     Returns:
-        JSON-serializable dict matching CoachingFeedback schema.
-        Falls back to a heuristic response if VLM is unavailable.
+        On success: dict matching CoachingFeedback schema (model_dump).
+        On failure: ``{"error": "<reason>", "player_id": "..."}`` — no
+        ``summary`` key, so the orchestrator propagates the failure.
     """
     try:
         bio_data = json.loads(biomechanics_json)
-    except json.JSONDecodeError as e:
-        return {"error": f"Invalid biomechanics JSON: {e}"}
+    except json.JSONDecodeError:
+        return {"error": "invalid_biomechanics_json", "player_id": player_id}
 
     try:
         recurring_issues: list[str] = json.loads(recurring_issues_json)
@@ -55,7 +65,13 @@ def generate_coaching_feedback(
         from src.api.schemas.domain import BiomechanicsReport, PlayerLevel, SessionContext
         from src.vlm.basketball_analyzer import BasketballVLMAnalyzer
         from src.vlm.gemini_client import GeminiFlashClient
+    except ImportError as e:
+        # VLM SDK not installed — config / env error, not user-input. Stable
+        # code in the response; the SDK name goes to logs only.
+        logger.error("VLM modules unavailable: %s", e)
+        return {"error": "vlm_unavailable", "player_id": player_id}
 
+    try:
         report = BiomechanicsReport.model_validate(bio_data)
         context = SessionContext(
             player_id=player_id,
@@ -67,31 +83,10 @@ def generate_coaching_feedback(
         client = GeminiFlashClient.from_env()
         analyzer = BasketballVLMAnalyzer(client)
         feedback = analyzer.analyze(report, context)
-        return feedback.model_dump()
-    except ImportError:
-        logger.warning("VLM modules not available — returning stub coaching feedback")
-        return _stub_coaching_feedback(bio_data, player_id)
+        return feedback.model_dump(mode="json")
     except Exception as e:
-        logger.error("VLM coaching failed: %s", e)
-        return _stub_coaching_feedback(bio_data, player_id, error=str(e))
-
-
-def _stub_coaching_feedback(
-    bio_data: dict[str, Any],
-    player_id: str,
-    error: str | None = None,
-) -> dict[str, Any]:
-    """Heuristic fallback when VLM is unavailable."""
-    primary = bio_data.get("primary_issue") or "Focus on your release mechanics"
-    return {
-        "player_id": player_id,
-        "shot_result": bio_data.get("shot_result", "unknown"),
-        "confidence": 0.0,
-        "summary": f"Analysis complete. {primary}",
-        "primary_correction": primary,
-        "detailed_analysis": error or "VLM unavailable — biomechanics-only analysis.",
-        "biomechanics": bio_data,
-        "drills": [],
-        "model_used": "fallback",
-        "processing_time_ms": None,
-    }
+        # Logged with full traceback for ops; response stays generic so we
+        # never leak internal state (API keys, paths, stack frames) to the
+        # user via the response body.
+        logger.exception("VLM coaching failed for player %s", player_id)
+        return {"error": f"coaching_failed:{type(e).__name__}", "player_id": player_id}

@@ -26,6 +26,10 @@ models/*.pth
 models/*.onnx
 models/*.h5
 !models/.gitkeep
+# Some loaders (ultralytics) drop weights into CWD on first call
+*.pt
+*.pth
+*.onnx
 
 # Secrets
 .env
