@@ -3,11 +3,32 @@
 from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from src.api.schemas.domain import CoachingFeedback, PlayerLevel  # noqa: TC001
+
+
+def _resolve_version() -> str:
+    """
+    Return the installed package version, with a safe default for source-run.
+
+    Reading from ``importlib.metadata`` makes pyproject.toml the single source
+    of truth — bumping the version there propagates everywhere (HealthResponse,
+    OpenAPI spec, logs) instead of leaving a stale hardcoded literal here.
+    """
+    try:
+        return _pkg_version("shoot-ai")
+    except PackageNotFoundError:
+        # Editable install without dist-info (rare on uv) or unrelated import
+        # path — use a clearly-marked placeholder rather than misleading "0".
+        return "0.0.0+unknown"
+
+
+APP_VERSION = _resolve_version()
 
 
 class TaskResponse(BaseModel):
@@ -56,7 +77,10 @@ class HealthComponent(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"] = "ok"
-    version: str = "0.5.0"
+    version: str = Field(
+        default_factory=lambda: APP_VERSION,
+        description="Package version resolved from installed metadata at startup.",
+    )
     components: dict[str, HealthComponent] = Field(default_factory=dict)
 
 

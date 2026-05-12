@@ -100,12 +100,26 @@ class ShotAnalysisPipeline:
         # Step 2 — Perception
         perception_result = extract_shot_frames(video_input.video_path)
         if "error" in perception_result:
-            # "error" key means a real runtime failure (not an ImportError stub).
-            # Propagating bad input to downstream steps produces misleading results.
+            # T0-5 Bug E/F: previously, ImportError fallback returned a stub with
+            # `player_detected: True` and the pipeline proceeded as if everything
+            # worked. perception_tools now surfaces errors instead.
             logger.error("Perception fatal error: %s", perception_result["error"])
             elapsed_ms = time.monotonic() * 1000 - start_ms
             emit("error", {"step": "perception", "message": perception_result["error"]})
             return self._error_result(player_id, perception_result["error"], elapsed_ms)
+
+        # T0-5 Bug C: validate that the perception step actually found a player
+        # and a shootable sequence. Without this, a video with no detectable
+        # human ends up with empty key_frames and the pipeline still returns
+        # a "success" with a generic coaching message ("Focus on release
+        # mechanics") that is misleading at best, harmful at worst.
+        if not perception_result.get("player_detected") or not perception_result.get("key_frames"):
+            msg = "no_shootable_content: no player or shot sequence detected in video"
+            logger.warning("Perception found no analyzable content: %s", msg)
+            elapsed_ms = time.monotonic() * 1000 - start_ms
+            emit("error", {"step": "perception", "message": msg})
+            return self._error_result(player_id, msg, elapsed_ms)
+
         emit(
             "perception_done",
             {
@@ -138,7 +152,14 @@ class ShotAnalysisPipeline:
             recurring_issues_json=json.dumps(context.recurring_issues),
             previous_drills_json=json.dumps(context.previous_drills),
         )
-        if "error" in feedback_result and not feedback_result.get("summary"):
+        # T0-5 Bug A/B: coach_tools previously returned a stub with a populated
+        # `summary` *and* an `error` field whenever the VLM call failed (missing
+        # API key, network error, …). The old check `not feedback_result.get(
+        # "summary")` therefore evaluated False and the pipeline reported
+        # status=done with the raw exception text leaked into `detailed_analysis`.
+        # coach_tools now returns `{"error": ..., "player_id": ...}` with no
+        # `summary`, so any `error` key means a fatal failure to propagate.
+        if "error" in feedback_result:
             logger.error("Coaching fatal error: %s", feedback_result["error"])
             elapsed_ms = time.monotonic() * 1000 - start_ms
             emit("error", {"step": "coaching", "message": feedback_result["error"]})

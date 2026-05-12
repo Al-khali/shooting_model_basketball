@@ -227,28 +227,45 @@ class TestPlayerMemoryService:
 
 
 class TestPerceptionTools:
-    def test_extract_shot_frames_returns_stub_on_import_error(self) -> None:
+    # T0-5 Bug E/F: perception_tools previously imported a non-existent
+    # `src.perception.video_processor` module — every call fell back to a
+    # stub that claimed `player_detected: True` regardless of the input.
+    # The tool now surfaces failures as `{"error": ..., "video_path": ...}`
+    # so the orchestrator can propagate status=error to the user.
+
+    def test_extract_shot_frames_returns_error_on_import_failure(self) -> None:
         from src.agents.tools.perception_tools import extract_shot_frames
 
-        with patch.dict("sys.modules", {"src.perception.video_processor": None}):
+        # Simulate the heavy CV dep being unavailable.
+        with patch.dict("sys.modules", {"src.perception.video_pipeline": None}):
             result = extract_shot_frames("nonexistent.mp4")
-        # Should return dict (stub or error), not raise
         assert isinstance(result, dict)
-        assert "video_path" in result or "error" in result
+        assert "error" in result, f"expected error key, got {result!r}"
+        assert result["error"].startswith("perception_unavailable")
+        assert result["video_path"] == "nonexistent.mp4"
 
-    def test_extract_shot_frames_handles_generic_exception(self) -> None:
-        from src.agents.tools.perception_tools import _stub_perception_output
+    def test_extract_shot_frames_returns_error_on_missing_video(self) -> None:
+        from src.agents.tools.perception_tools import extract_shot_frames
 
-        stub = _stub_perception_output("test.mp4")
-        assert stub["fps"] == 30.0
-        assert stub["player_detected"] is True
+        result = extract_shot_frames("/tmp/this-path-does-not-exist-12345.mp4")
+        assert "error" in result
+        # Either video_not_found (preferred) or perception_unavailable when
+        # CV deps are missing — both are acceptable error signals.
+        assert result["error"].startswith(("video_not_found", "perception_unavailable"))
 
-    def test_stub_perception_output_structure(self) -> None:
-        from src.agents.tools.perception_tools import _stub_perception_output
+    def test_extract_shot_frames_never_leaks_exception_text(self) -> None:
+        """The error string must be a stable code, not a raw exception message."""
+        from src.agents.tools.perception_tools import extract_shot_frames
 
-        out = _stub_perception_output("video.mp4")
-        required_keys = {"video_path", "fps", "total_frames", "player_detected", "ball_detected"}
-        assert required_keys.issubset(out.keys())
+        result = extract_shot_frames("/tmp/missing.mp4")
+        if "error" in result:
+            err = result["error"]
+            # No filesystem paths, traceback frames, or module names —
+            # the response is a stable code; details live in logs only.
+            assert "Traceback" not in err
+            assert "/tmp/" not in err
+            assert "/Users/" not in err
+            assert "\n" not in err
 
 
 # ---------------------------------------------------------------------------
@@ -286,29 +303,45 @@ class TestAnalysisTools:
 
 
 class TestCoachTools:
+    # T0-5 Bug A/B: coach_tools previously returned a stub with a populated
+    # `summary` and a raw exception message in `detailed_analysis` whenever
+    # the VLM call failed. The orchestrator then reported status=done with
+    # the leaked error text exposed to the API caller. The tool now returns
+    # `{"error": ..., "player_id": ...}` with no `summary` so the failure
+    # is propagated cleanly.
+
     def test_generate_feedback_invalid_biomechanics_json(self) -> None:
         from src.agents.tools.coach_tools import generate_coaching_feedback
 
         result = generate_coaching_feedback("bad-json")
         assert "error" in result
+        assert result["error"].startswith("invalid_biomechanics_json")
+        assert "summary" not in result
 
-    def test_generate_feedback_returns_stub_on_import_error(self) -> None:
+    def test_generate_feedback_returns_error_on_import_failure(self) -> None:
         from src.agents.tools.coach_tools import generate_coaching_feedback
 
         bio = BiomechanicsReport(shot_result=ShotResult.MISSED)
         with patch.dict("sys.modules", {"src.vlm.gemini_client": None}):
-            result = generate_coaching_feedback(bio.model_dump_json())
-        assert isinstance(result, dict)
-        assert "summary" in result or "error" in result
+            result = generate_coaching_feedback(bio.model_dump_json(), player_id="p-test")
+        assert "error" in result
+        assert result["error"].startswith("vlm_unavailable")
+        assert result["player_id"] == "p-test"
+        # No `summary` — that was the field that masked failures as success.
+        assert "summary" not in result
 
-    def test_stub_coaching_feedback_structure(self) -> None:
-        from src.agents.tools.coach_tools import _stub_coaching_feedback
+    def test_generate_feedback_never_leaks_exception_text(self) -> None:
+        """The user-facing error must be a stable code, not a Python message."""
+        from src.agents.tools.coach_tools import generate_coaching_feedback
 
-        bio_data = {"shot_result": "made", "primary_issue": "elbow flare"}
-        out = _stub_coaching_feedback(bio_data, "p1")
-        assert out["model_used"] == "fallback"
-        assert out["confidence"] == 0.0
-        assert "elbow flare" in out["primary_correction"]
+        bio = BiomechanicsReport(shot_result=ShotResult.MISSED)
+        # No GEMINI_API_KEY in this test env → from_env() raises VLMError.
+        result = generate_coaching_feedback(bio.model_dump_json())
+        if "error" in result:
+            err = result["error"]
+            assert "GEMINI_API_KEY" not in err, "raw SDK message leaked into response"
+            assert "Traceback" not in err
+            assert "/Users/" not in err
 
 
 # ---------------------------------------------------------------------------
@@ -423,9 +456,55 @@ class TestShotAnalysisPipeline:
 
         return ShotAnalysisPipeline(memory_service=PlayerMemoryService(store_dir=tmp_path))
 
-    def test_analyze_anonymous_player_returns_result(self, tmp_path: Path) -> None:
+    @staticmethod
+    def _stub_tools(monkeypatch: pytest.MonkeyPatch, player_id: str = "p") -> None:
+        """
+        Patch the three pipeline tools to return valid (not error) outputs.
+
+        T0-5: production tools no longer fall back to silent stubs when a
+        dependency is missing or a video is absent — they return
+        ``{"error": ...}`` so the orchestrator can propagate status=error.
+        Tests that want to exercise the success path must therefore inject
+        plausible outputs explicitly here, mirroring what the real tools
+        would produce when models are loaded and the video is valid.
+        """
+        from src.agents import orchestrator
+
+        def fake_perception(_video_path: str) -> dict[str, Any]:
+            return {
+                "video_path": _video_path,
+                "fps": 30.0,
+                "total_frames": 90,
+                "player_detected": True,
+                "ball_detected": True,
+                "key_frames": [{"frame_index": 0, "timestamp_ms": 0.0, "keypoints": []}],
+                "shot_phases": {"release": 45},
+            }
+
+        def fake_biomechanics(_perception_json: str) -> dict[str, Any]:
+            return {
+                "shot_result": "made",
+                "joint_angles": [],
+                "timing": {},
+                "trajectory": {},
+                "primary_issue": "elbow flare",
+                "issues_detected": ["elbow flare"],
+                "alignment_score": 0.7,
+            }
+
+        def fake_coaching(**_kwargs: Any) -> dict[str, Any]:
+            return _make_feedback(player_id=player_id).model_dump(mode="json")
+
+        monkeypatch.setattr(orchestrator, "extract_shot_frames", fake_perception)
+        monkeypatch.setattr(orchestrator, "compute_biomechanics", fake_biomechanics)
+        monkeypatch.setattr(orchestrator, "generate_coaching_feedback", fake_coaching)
+
+    def test_analyze_anonymous_player_returns_result(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from src.api.schemas.domain import VideoInput
 
+        self._stub_tools(monkeypatch, player_id="anonymous")
         pipeline = self._make_pipeline(tmp_path)
         result = pipeline.analyze(VideoInput(video_path="shot.mp4"))
         assert result["player_id"] == "anonymous"
@@ -433,19 +512,23 @@ class TestShotAnalysisPipeline:
         assert "training_plan" in result
         assert result["processing_time_ms"] > 0
 
-    def test_analyze_with_player_id_saves_session(self, tmp_path: Path) -> None:
+    def test_analyze_with_player_id_saves_session(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from src.api.schemas.domain import VideoInput
 
+        self._stub_tools(monkeypatch, player_id="p99")
         pipeline = self._make_pipeline(tmp_path)
         result = pipeline.analyze(VideoInput(video_path="shot.mp4", player_id="p99"))
-        # The stub feedback may not be parseable as CoachingFeedback — that's OK
-        # We just check the pipeline ran and returned a result
         assert result["player_id"] == "p99"
         assert result["session_number"] == 1
 
-    def test_analyze_increments_session_on_second_run(self, tmp_path: Path) -> None:
+    def test_analyze_increments_session_on_second_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from src.api.schemas.domain import VideoInput
 
+        self._stub_tools(monkeypatch, player_id="p10")
         pipeline = self._make_pipeline(tmp_path)
         # Pre-seed a valid feedback directly
         feedback = _make_feedback(player_id="p10")
@@ -453,6 +536,19 @@ class TestShotAnalysisPipeline:
 
         result = pipeline.analyze(VideoInput(video_path="shot.mp4", player_id="p10"))
         assert result["session_number"] == 2
+
+    def test_analyze_returns_error_when_video_missing(self, tmp_path: Path) -> None:
+        """T0-5 Bug E/F: no more silent stub — missing video → status=error."""
+        from src.api.schemas.domain import VideoInput
+
+        pipeline = self._make_pipeline(tmp_path)
+        result = pipeline.analyze(VideoInput(video_path="/tmp/nope.mp4"))
+        # Either video_not_found (real CV deps present) or perception_unavailable
+        # (CV deps stripped in this test env) — both are valid status=error
+        # signals, neither leaks the raw exception text.
+        assert "error" in result
+        assert result["coaching_feedback"] is None
+        assert result["training_plan"] is None
 
     def test_error_result_structure(self, tmp_path: Path) -> None:
         pipeline = self._make_pipeline(tmp_path)
