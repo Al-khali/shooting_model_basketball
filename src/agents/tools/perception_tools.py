@@ -4,14 +4,45 @@ Wraps the AI Shoot Phase 1 perception pipeline (VideoProcessor — pose
 estimation + shot phase detection in one pass).
 
 Uses deferred imports so the module loads in CI without heavy model weights.
+The ``VideoProcessor`` instance is cached at module level: the YOLO/MediaPipe
+weights load from disk on the first ``extract_shot_frames`` call (~500ms–2s)
+and are kept hot for subsequent calls. This is safe because ``VideoProcessor``
+is stateless w.r.t. inputs — the underlying estimators are read-only after
+``__init__``.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+import threading
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.perception.video_pipeline import VideoProcessor
 
 logger = logging.getLogger(__name__)
+
+# Lazy-initialized singleton — first call pays the model-load cost; later
+# calls reuse the loaded weights. Guarded by a lock because FastAPI runs
+# blocking tools in a worker pool via ``anyio.to_thread.run_sync``, so two
+# concurrent /analyze requests can race here on a cold cache.
+_processor: VideoProcessor | None = None
+_processor_lock = threading.Lock()
+
+
+def _get_processor() -> VideoProcessor:
+    """Return the cached ``VideoProcessor``, building it on first call."""
+    global _processor
+    if _processor is None:
+        with _processor_lock:
+            if _processor is None:
+                from src.perception.video_pipeline import (  # noqa: PLC0415
+                    VideoProcessor as _VP,
+                )
+
+                _processor = _VP()
+                logger.info("VideoProcessor initialized — models loaded into memory")
+    return _processor
 
 
 def extract_shot_frames(video_path: str) -> dict[str, Any]:
@@ -33,9 +64,7 @@ def extract_shot_frames(video_path: str) -> dict[str, Any]:
         ``error`` key so callers can surface a clean status to the user.
     """
     try:
-        from src.perception.video_pipeline import VideoProcessor  # noqa: PLC0415
-
-        processor = VideoProcessor()
+        processor = _get_processor()
         output = processor.process(video_path)
         return output.model_dump(mode="json")
     except ImportError as e:

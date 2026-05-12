@@ -77,8 +77,12 @@ class HealthComponent(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"] = "ok"
+    # APP_VERSION is a module-level immutable string resolved once at import
+    # time — `default=` is sufficient. `default_factory` is only needed for
+    # mutable defaults (dicts, lists) or when each instantiation requires a
+    # fresh value.
     version: str = Field(
-        default_factory=lambda: APP_VERSION,
+        default=APP_VERSION,
         description="Package version resolved from installed metadata at startup.",
     )
     components: dict[str, HealthComponent] = Field(default_factory=dict)

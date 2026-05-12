@@ -233,12 +233,21 @@ class TestPerceptionTools:
     # The tool now surfaces failures as `{"error": ..., "video_path": ...}`
     # so the orchestrator can propagate status=error to the user.
 
-    def test_extract_shot_frames_returns_error_on_import_failure(self) -> None:
-        from src.agents.tools.perception_tools import extract_shot_frames
+    def test_extract_shot_frames_returns_error_on_import_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.agents.tools import perception_tools
 
-        # Simulate the heavy CV dep being unavailable.
+        # Reset the module-level cache: a previous test may have warmed it,
+        # which would make `patch.dict("sys.modules", ...)` a no-op since
+        # the lazy import has already happened.
+        monkeypatch.setattr(perception_tools, "_processor", None)
+
+        # Simulate the heavy CV dep being unavailable. Patch sys.modules so
+        # the lazy `from src.perception.video_pipeline import VideoProcessor`
+        # inside _get_processor() raises ImportError.
         with patch.dict("sys.modules", {"src.perception.video_pipeline": None}):
-            result = extract_shot_frames("nonexistent.mp4")
+            result = perception_tools.extract_shot_frames("nonexistent.mp4")
         assert isinstance(result, dict)
         assert "error" in result, f"expected error key, got {result!r}"
         assert result["error"].startswith("perception_unavailable")
