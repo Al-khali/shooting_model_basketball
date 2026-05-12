@@ -94,3 +94,16 @@ resource "google_service_account_iam_member" "cicd_act_as_run" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${google_service_account.cicd.email}"
 }
+
+# CI/CD needs read+write on the tfstate bucket so `terraform init/plan/apply`
+# can list, read, and update the state object during deploys. Without this,
+# every CI run fails at `terraform init` with HTTP 403 on
+# `storage.objects.list`. The bucket itself is created by `bootstrap.sh`
+# (out-of-Terraform, chicken-and-egg with the backend block in main.tf),
+# so we reference it by its conventional name `${project_id}-tfstate`
+# rather than attempting to manage the bucket resource here.
+resource "google_storage_bucket_iam_member" "cicd_tfstate" {
+  bucket = "${var.project_id}-tfstate"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cicd.email}"
+}
