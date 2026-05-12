@@ -16,10 +16,11 @@ Post-audit v1.0.0 : 7 tracks parallèles pour passer la plateforme à la prochai
 - [x] **T0-2** Deploy preflight skip — diagnostic zero-secret + preflight job → **livré v1.0.2 (PR #33)**
 - [x] **T0-5** Validation locale end-to-end + 6 bugs silencieux + cache VideoProcessor → **livré v1.0.3 (PR #35)**
 - [x] **T0-6** Bootstrap GCP réel — projet `shoot-ai-poc` live à `https://shoot-ai-dev-chf52ondba-uc.a.run.app`, 25 ressources, 5 GH secrets, `deletion_protection` environment-conditional → **livré v1.0.4 (PR #36)**. Workflow Deploy CI désormais débloqué.
-- [x] **T0-3/T0-7** Narrow 3 `except Exception:` (analyze.py:219,248 + video_pipeline.py:246) + VLM retry/timeout (full jitter AWS pattern) + 7 nouveaux tests. Rebase clean post-T0-5 sans aucun conflit (T0-3 et T0-5 sur fichiers disjoints) → **livré v1.0.5 (PR #34)**. 190 tests total.
+- [x] **T0-3/T0-7** Narrow 3 `except Exception:` + VLM retry/timeout (full jitter AWS pattern) + 7 nouveaux tests. Rebase clean post-T0-5 (T0-3 et T0-5 sur fichiers disjoints) → **livré v1.0.5 (PR #34)**. 190 tests total.
+- [x] **T0-9** YOLO `yolo11n-pose.pt` pre-fetched + baked dans `/app/yolo11n-pose.pt`. 3 libs système ajoutées au builder (libgl1, libglib2.0-0, libxcb1) pour fixer le pull transitif `opencv-contrib-python`. Premier REJECT du programme (paramétrisation YOLO_MODEL ARG/ENV — out of scope POC) validé par Gemini → **livré v1.0.6 (PR #37)**
 - [ ] **T0-4** Triage Dependabot alert #228 — CVE-2025-69872 DiskCache (MEDIUM, transitive, no upstream patch). Décider : ignore-rule documenté, downstream pinning, ou retrait dep si possible
 - [ ] **T0-8 (follow-up T0-6)** `/unknown` route → 401 au lieu de 404. Le middleware auth tourne avant le routing FastAPI. Trade-off : anti-enumeration (cacher la map d'API) vs UX (404 informatif). Options : (a) garder 401 + documenter ; (b) passer auth en `Depends()` per-route ; (c) middleware qui laisse passer si la route n'existe pas
-- [ ] **T0-9 (follow-up T0-6)** YOLO weights baking dans l'image Docker. Au cold-start de chaque instance Cloud Run fraîche, ultralytics télécharge `yolo11n-pose.pt` (~6MB) depuis Internet → +500ms-2s sur le 1er `/analyze`. Fix : `RUN python -c "from ultralytics import YOLO; YOLO('yolo11n-pose.pt')"` dans le Dockerfile pour pré-cacher les weights
+- [ ] **T0-10 (optionnel follow-up T0-9)** Centraliser `YOLO_MODEL` via `ARG`/`ENV`/`os.getenv()` quand un besoin réel apparaît. Patron clean : single source of truth dans `pyproject.toml` ou `.env.example`, propagation Docker + Terraform Cloud Run env. Pas prioritaire en POC à un seul modèle ; à activer en Phase 6 (ONNX/mobile peut amener variants) ou si A/B yolo11n vs yolo11s/m/l devient pertinent
 
 ### Track 1 — Challenge qualif tech *(P1 — 3-5 jours)*
 

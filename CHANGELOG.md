@@ -4,6 +4,31 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.6] — Track 0 (T0-9): bake YOLO pose weights into Docker image (2026-05-12)
+
+Follow-up T0-6 identifié sur la live test Cloud Run : cold-start de chaque nouvelle instance téléchargeait `yolo11n-pose.pt` (~6 MB) depuis GitHub avant le 1er `/analyze`. Avec scale-to-zero, ce coût frappait la majorité des requêtes POC.
+
+### Performance
+- **`Dockerfile`** — pre-fetch des weights YOLO au build time, baked dans `/app/yolo11n-pose.pt` du runtime stage
+  - Builder stage : 3 libs système ajoutées (`libgl1`, `libglib2.0-0`, `libxcb1`) pour permettre `import cv2`. `ultralytics` traîne transitivement `opencv-contrib-python` (full GUI, link contre libxcb) malgré le `opencv-python-headless` pinné dans `pyproject.toml`. Sans ces libs, le pre-fetch fail : `ImportError: libxcb.so.1: cannot open shared object file`.
+  - Pre-fetch via `.venv/bin/python -c "from ultralytics import YOLO; YOLO('yolo11n-pose.pt')"` → file dans `/build/yolo11n-pose.pt`
+  - Runtime stage : `COPY --from=builder --chown=appuser:appuser /build/yolo11n-pose.pt ./yolo11n-pose.pt`. `ultralytics` au runtime résout le relative path contre CWD=`/app` (WORKDIR), donc pur disk read, aucun network call
+- **Image** : +50 MB (delta OCI incluant métadata pour 6.25 MB de poids). Push CI/CD inchangé (layer cachée après 1er push)
+- **Bénéfice attendu Cloud Run x86_64** : ~500ms–2s économisés sur le 1er `/analyze` de chaque instance fraîche
+
+### Verification (local Apple Silicon, QEMU linux/amd64)
+- `docker build` step builder/10 passe : `RUN .venv/bin/python -c "from ultralytics import YOLO; YOLO('yolo11n-pose.pt')"` ✅
+- `docker run --rm shoot-ai:baked ls -la /app/yolo11n-pose.pt` → `6255593 bytes appuser` ✅
+- `docker logs <container> | grep -i download` → empty (le model est preloaded, aucun GitHub fetch) ✅
+
+### Notes Gemini Code Assist
+- 1 finding MEDIUM (centraliser le nom du modèle via `ARG YOLO_MODEL` + `ENV` + `os.getenv()`) — **REJECTED**, follow-up loggé en T0-10
+- Justification REJECT : (1) le modèle est architectural pas runtime (couplé à `PoseModel.YOLOV11` enum), (2) POC à un seul modèle pas de switch prévu, (3) paramétrisation propre demanderait 7 fichiers touchés (Dockerfile + pose_estimator + .env.example + docker-compose + cloud_run.tf + scripts/local_e2e.sh + tests) pour bénéfice spéculatif, (4) scope PR = perf pas archi, (5) follow-up dédié quand le besoin réel apparaîtra (Phase 6 ONNX/mobile, A/B testing variants YOLO)
+- Validation finale Gemini : *"Ton analyse sur le couplage architectural et la gestion du scope pour ce POC est tout à fait pertinente. Le suivi via un ticket dans le BACKLOG est la bonne approche pour éviter l'over-engineering tout en gardant une trace technique pour les évolutions futures (Phase 6). ... Prêt pour le merge."* — **premier REJECT du programme v2.0 validé par Gemini**
+
+### Follow-up logged
+- **T0-10 (optionnel)** Centraliser le choix YOLO via `ARG YOLO_MODEL` + `ENV` + `os.getenv('YOLO_MODEL', default)`. À activer quand le besoin réel apparaît (Phase 6 ONNX/mobile, A/B testing yolo11n vs yolo11s/m/l). Patron clean : single source of truth dans `pyproject.toml` ou `.env.example`, propagation Docker + Terraform Cloud Run env
+
 ## [1.0.5] — Track 0 (T0-3/T0-7): narrow exception handlers + VLM retry/timeout (2026-05-12)
 
 Retour de la PR #34 mise en draft pendant T0-5 (course-correction). Rebase sur baseline v1.0.4 **clean, zéro conflit** — T0-3 et T0-5 touchent des fichiers disjoints.
