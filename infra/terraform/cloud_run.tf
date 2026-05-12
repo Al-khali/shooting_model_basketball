@@ -16,6 +16,14 @@ resource "google_cloud_run_v2_service" "api" {
   # Allow unauthenticated requests — auth handled by X-API-Key middleware
   ingress = "INGRESS_TRAFFIC_ALL"
 
+  # POC: Terraform-managed iteration replaces images frequently. The default
+  # `deletion_protection = true` blocks destroy/recreate flows on image_tag
+  # change, which would force operators to mutate state manually. For prod,
+  # flip this back to true and rely on `terraform apply` updating in place
+  # (image change normally does NOT need destroy/recreate — but other field
+  # changes do, e.g. moving region or renaming).
+  deletion_protection = false
+
   template {
     service_account = google_service_account.cloud_run.email
 
@@ -32,8 +40,8 @@ resource "google_cloud_run_v2_service" "api" {
           cpu    = var.cloud_run_cpu
           memory = var.cloud_run_memory
         }
-        cpu_idle          = true  # only charge CPU when processing requests
-        startup_cpu_boost = true  # extra CPU during cold start
+        cpu_idle          = true # only charge CPU when processing requests
+        startup_cpu_boost = true # extra CPU during cold start
       }
 
       ports {
@@ -91,7 +99,7 @@ resource "google_cloud_run_v2_service" "api" {
         }
         initial_delay_seconds = 5
         period_seconds        = 5
-        failure_threshold     = 12  # up to 60s startup window
+        failure_threshold     = 12 # up to 60s startup window
         timeout_seconds       = 10
       }
     }

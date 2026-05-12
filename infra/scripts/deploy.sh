@@ -5,8 +5,8 @@
 # Prerequisites: gcloud CLI authenticated, Docker running, Terraform installed.
 #
 # Usage:
-#   export PROJECT_ID="shoot-ai-dev"
-#   export REGION="europe-west1"
+#   export PROJECT_ID="shoot-ai-poc"
+#   export REGION="us-central1"
 #   export ENVIRONMENT="dev"
 #   export GEMINI_API_KEY="your-key"
 #   export TF_VAR_api_keys='["your-dev-key"]'   # Terraform list(string) format
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID}"
-REGION="${REGION:-europe-west1}"
+REGION="${REGION:-us-central1}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 APP_NAME="shoot-ai"
 TFSTATE_BUCKET="${PROJECT_ID}-tfstate"
