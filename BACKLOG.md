@@ -13,11 +13,13 @@ Post-audit v1.0.0 : 7 tracks parallèles pour passer la plateforme à la prochai
 ### Track 0 — Stabilisation *(P0 — 2-3 jours)*
 
 - [x] **T0-1** Trivy hardening — pin `@v0.36.0`, schedule cron, HIGH+CRITICAL gating, SARIF upload → **livré v1.0.1 (PR #32)**
-- [x] **T0-2** Deploy preflight skip — diagnosed: zero secrets configured (`gh api .../actions/secrets` → 0). Fix: preflight job + `if: needs.preflight.outputs.ready == 'true'` on build/deploy/smoke → **livré v1.0.2 (PR #33)**
-- [x] **T0-5** Validation locale end-to-end + 6 bugs silencieux (leak exception text, status=done dégradé, no media validation, version désynchro, perception import path cassé, API VideoProcessor mal utilisée). Fixes + `scripts/local_e2e.sh` + cache VideoProcessor singleton + Pydantic default scalaire → **livré v1.0.3 (PR #35)**
-- [ ] **T0-3 (en pause)** Resserrer 3 `except Exception:` (analyze.py:219,248 + video_pipeline.py:246) + `VLMConfig.retry_attempts/timeout_s` appliqué dans `gemini_client`. **PR #34** mise en draft pendant T0-5 — à ré-ouvrir + rebase sur main (les 4 fixes Gemini sur le retry path restent valides : full jitter, list[dict] hint, response.text dans try, math docstring)
-- [ ] **T0-6 (nouveau)** Bootstrap GCP réel — exécuter `infra/scripts/bootstrap.sh` + `terraform apply` une fois pour provisionner Workload Identity pool + service accounts + Artifact Registry + Secret Manager. Étape opérateur humain (requiert `gcloud auth login` interactif, pas faisable en CI). Une fois fait : `gh secret set GCP_WORKLOAD_IDENTITY_PROVIDER` + 4 autres → workflow Deploy débloqué
-- [ ] **T0-4 (follow-up)** Triage Dependabot alert #228 — CVE-2025-69872 DiskCache (MEDIUM, transitive, no upstream patch). Décider : ignore-rule documenté, downstream pinning, ou retrait dep si possible
+- [x] **T0-2** Deploy preflight skip — diagnostic zero-secret + preflight job → **livré v1.0.2 (PR #33)**
+- [x] **T0-5** Validation locale end-to-end + 6 bugs silencieux + cache VideoProcessor → **livré v1.0.3 (PR #35)**
+- [x] **T0-6** Bootstrap GCP réel — projet `shoot-ai-poc` live à `https://shoot-ai-dev-chf52ondba-uc.a.run.app`, 25 ressources, 5 GH secrets, `deletion_protection` environment-conditional → **livré v1.0.4 (PR #36)**. Workflow Deploy CI désormais débloqué.
+- [ ] **T0-3 (en pause)** Resserrer 3 `except Exception:` + VLM retry/timeout. **PR #34** mise en draft pendant T0-5 — à ré-ouvrir + rebase sur main. Les 4 fixes Gemini sur le retry path restent valides (full jitter, list[dict] hint, response.text dans try, math docstring)
+- [ ] **T0-4** Triage Dependabot alert #228 — CVE-2025-69872 DiskCache (MEDIUM, transitive, no upstream patch). Décider : ignore-rule documenté, downstream pinning, ou retrait dep si possible
+- [ ] **T0-8 (follow-up T0-6)** `/unknown` route → 401 au lieu de 404. Le middleware auth tourne avant le routing FastAPI. Trade-off : anti-enumeration (cacher la map d'API) vs UX (404 informatif). Options : (a) garder 401 + documenter ; (b) passer auth en `Depends()` per-route ; (c) middleware qui laisse passer si la route n'existe pas
+- [ ] **T0-9 (follow-up T0-6)** YOLO weights baking dans l'image Docker. Au cold-start de chaque instance Cloud Run fraîche, ultralytics télécharge `yolo11n-pose.pt` (~6MB) depuis Internet → +500ms-2s sur le 1er `/analyze`. Fix : `RUN python -c "from ultralytics import YOLO; YOLO('yolo11n-pose.pt')"` dans le Dockerfile pour pré-cacher les weights
 
 ### Track 1 — Challenge qualif tech *(P1 — 3-5 jours)*
 

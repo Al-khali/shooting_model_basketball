@@ -4,6 +4,52 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.4] — Track 0: GCP bootstrap real (T0-6) — first live deploy (2026-05-12)
+
+**Premier provisioning GCP réel** depuis la création du projet. Les agents précédents avaient shippé Terraform + CI/CD sans jamais avoir bootstrappé contre un vrai billing account. T0-6 ferme ce gap.
+
+### Live deployment
+- **Service URL** : `https://shoot-ai-dev-chf52ondba-uc.a.run.app` (Cloud Run v2, us-central1)
+- **Project** : `shoot-ai-poc` (#592121247070)
+- **Billing** : `cpt_bst_1` (01E0C6-D8BA4E-0D2C3F) — 3 anciens accounts étaient fermés
+- **25 ressources** Terraform créées : 7 APIs activées + 2 service accounts (cicd, cloud_run) + 2 secrets (gemini-api-key, api-keys) + 2 versions + Workload Identity pool/provider + 4 IAM bindings + Artifact Registry + Cloud Run v2 + public_access IAM
+- **5 GitHub secrets** configurés (`GCP_PROJECT_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`, `API_KEYS`, `GEMINI_API_KEY`) — le workflow Deploy passe désormais le preflight et exécute le build+push+apply
+
+### Changed
+- **Région** `europe-west1` → `us-central1` (`infra/terraform/variables.tf`, `tfvars`, `deploy.yml`, `bootstrap.sh`, `deploy.sh`). Cloud Storage Always Free tier (5 GB-mois) s'applique seulement à us-east1/us-west1/us-central1. Pour zero-budget POC strict, on choisit us-central1. Latence depuis EU ~+100ms cold path uniquement.
+- **Project ID** placeholder `shoot-ai-dev` → `shoot-ai-poc` (suffixe explicite POC, anticipe un futur `shoot-ai-prod` séparé)
+- **`cloud_run.tf`** : `deletion_protection = var.environment == "prod"` (finding Gemini ACCEPTED) — environment-driven, false en dev/POC pour itérer librement, true en prod pour anti-destroy. Self-documenting + anti-regression.
+
+### Fixed
+- **Cloud Run service `deletion_protection`** : valeur par défaut `true` côté GCP bloquait les destroy/recreate sur changement d'image_tag → workaround manuel pendant le bootstrap (`gcloud run services delete` + `terraform state rm` + re-apply). Maintenant désactivé en dev/POC pour permettre l'itération.
+
+### Live verification
+- `GET /health` → 200 (version `1.0.3` dynamique via `importlib.metadata`, 433ms)
+- `GET /player/test/history` (no key) → 401
+- `GET /player/test/history` + valid key → 200
+- `POST /analyze` + stub.mp4 + valid key → 202 task_id
+
+### Notes Gemini Code Assist
+- 1 finding MEDIUM sur `deletion_protection` hardcoded false (proposé `var.environment == "prod"`) — **ACCEPTED**
+- Validation finale : *"Ton approche pour la gestion de `deletion_protection` est excellente : elle équilibre parfaitement la flexibilité nécessaire pour le POC et la sécurité requise pour une future mise en production. ... Tout semble en ordre pour le merge."*
+
+### Follow-ups identifiés via les live tests (logged in BACKLOG)
+- **T0-8** `/unknown` route retourne 401 au lieu de 404 — le middleware auth tourne avant le routing FastAPI. Trade-off anti-enumeration vs UX à arbitrer (ou passer auth en dependency per-route)
+- **T0-9** YOLO weights non bakés dans l'image Docker — chaque instance fraîche télécharge ~6MB depuis ultralytics au cold start, ralentit le premier `/analyze` post-scaling. À mitiger : copier les weights dans l'image au build
+- **T2-3 priorisé** TaskStore in-memory : autoscaling Cloud Run entre instances perd les tasks. Polling sur cold start a confirmé que GET /session reste accessible mais le bg task ne complete pas dans le timing local — Firestore-backed store devient bloqueur prod
+
+### Action requise hors-PR (operator)
+1. `gcloud auth login` + `gcloud auth application-default login`
+2. `gcloud projects create shoot-ai-poc --name="AI Shoot POC"`
+3. Création billing account `cpt_bst_1` via console GCP
+4. `gcloud billing projects link shoot-ai-poc --billing-account=01E0C6-D8BA4E-0D2C3F`
+5. `PROJECT_ID=shoot-ai-poc BILLING_ACCOUNT=... REGION=us-central1 bash infra/scripts/bootstrap.sh`
+6. `terraform -chdir=infra/terraform init -backend-config="bucket=shoot-ai-poc-tfstate" ...`
+7. `terraform import google_project.shoot_ai shoot-ai-poc`
+8. `docker build` + `docker push` (chicken-and-egg sur la 1re image)
+9. `terraform apply` (25 ressources)
+10. `gh secret set` les 5 secrets via Terraform outputs
+
 ## [1.0.3] — Track 0 (stabilisation): end-to-end validation + 6 silent bugs (2026-05-12)
 
 **Course-correction critique** : avant ce PR la stack n'avait **jamais** tourné end-to-end avec un vrai POST `/analyze`. Le premier run local (uvicorn + ffmpeg stub video + curl) a révélé 6 bugs que les 182 tests unitaires verts n'ont pas attrapés, parce que les tools tombaient en silence sur des stubs deferred-import.
