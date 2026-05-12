@@ -9,9 +9,18 @@ variable "billing_account" {
 }
 
 variable "region" {
-  description = "GCP region for Cloud Run and Artifact Registry"
+  description = <<-EOT
+    GCP region for Cloud Run and Artifact Registry.
+
+    Default is us-central1 because that's one of the three regions
+    (us-east1 / us-west1 / us-central1) where Cloud Storage has a
+    5 GB-month Always Free tier — keeping the Terraform state bucket
+    and the Artifact Registry repo within zero-cost limits for the POC.
+    Pick a regional alternative (e.g. europe-west1) if cold-start
+    latency from Europe matters more than the few cents/month delta.
+  EOT
   type        = string
-  default     = "europe-west1"
+  default     = "us-central1"
 }
 
 variable "environment" {

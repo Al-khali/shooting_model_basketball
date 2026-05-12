@@ -6,16 +6,16 @@
 # Prerequisites: gcloud CLI authenticated with Owner/Editor on billing account.
 #
 # Usage:
-#   export PROJECT_ID="shoot-ai-dev"
+#   export PROJECT_ID="shoot-ai-poc"
 #   export BILLING_ACCOUNT="XXXXXX-XXXXXX-XXXXXX"
-#   export REGION="europe-west1"
+#   export REGION="us-central1"   # Always Free tier — see variables.tf for rationale
 #   bash infra/scripts/bootstrap.sh
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID}"
 BILLING_ACCOUNT="${BILLING_ACCOUNT:?Set BILLING_ACCOUNT}"
-REGION="${REGION:-europe-west1}"
+REGION="${REGION:-us-central1}"
 TFSTATE_BUCKET="${PROJECT_ID}-tfstate"
 
 echo "==> Bootstrap: project=${PROJECT_ID} region=${REGION}"
