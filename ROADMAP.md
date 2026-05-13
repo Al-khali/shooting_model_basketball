@@ -118,10 +118,12 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 - [x] **T0-5** End-to-end local validation — 6 silent bugs uncovered + `scripts/local_e2e.sh` automation + VideoProcessor caching (PR #35 / v1.0.3)
 - [x] **T0-6** Bootstrap GCP réel — projet `shoot-ai-poc` live à `https://shoot-ai-dev-chf52ondba-uc.a.run.app`, 25 ressources Terraform créées, 5 GitHub secrets configurés, `deletion_protection` environment-conditional (PR #36 / v1.0.4)
 - [x] **T0-3/T0-7** Narrow exceptions (3 sites) + VLM retry/timeout avec full jitter (AWS pattern) + 7 tests unitaires retry. Rebase clean post-T0-5 (PR #34 / v1.0.5). 190 tests total.
-- [x] **T0-9** YOLO `yolo11n-pose.pt` pre-fetched + baked dans l'image Docker (`/app/yolo11n-pose.pt`). Build-time download, runtime load disk-only. +50 MB image, ~500ms-2s économisés au cold-start Cloud Run. Premier REJECT challenger du programme validé par Gemini (PR #37 / v1.0.6)
+- [x] **T0-9** YOLO `yolo11n-pose.pt` pre-fetched + baked dans l'image Docker. +50 MB image, ~500ms-2s économisés au cold-start. Premier REJECT challenger validé par Gemini (PR #37 / v1.0.6)
+- [x] **T0-11** Unblock CI/CD deploy — 3 IAM/API fixes (storage.admin binding sur tfstate bucket, cloudresourcemanager.googleapis.com API, project ref vs var). Cascade de 3 root causes débloquée par les 2 findings Gemini + un 3e fix anticipé par sa review (PR #38 / v1.0.7)
 - [ ] **T0-4** Dependabot alert #228 — CVE-2025-69872 DiskCache MEDIUM, pas de patch upstream, ignore-rule à documenter
-- [ ] **T0-8** (follow-up T0-6) `/unknown` route retourne 401 au lieu de 404 — middleware auth runs before routing, anti-enumeration vs UX trade-off à arbitrer
-- [ ] **T0-10** (optionnel follow-up T0-9 Gemini) Centraliser le choix YOLO via `ARG`/`ENV`/`os.getenv()` quand un besoin réel de switch apparaît (Phase 6 ONNX/mobile, A/B variants yolo11n/s/m/l)
+- [ ] **T0-8** (follow-up T0-6) `/unknown` route retourne 401 au lieu de 404 — middleware auth runs before routing
+- [ ] **T0-10** (optionnel follow-up T0-9) Centraliser le choix YOLO via `ARG`/`ENV`/`os.getenv()` quand un besoin réel de switch apparaît
+- [ ] **T0-12** (nouveau follow-up T0-11) Formaliser le `roles/editor` du SA cicd en hot-fix dans `iam.tf`. Idéalement substitué par 3 rôles plus étroits (`iam.serviceAccountAdmin`, `serviceusage.serviceUsageAdmin`, `resourcemanager.projectIamAdmin`)
 
 ---
 

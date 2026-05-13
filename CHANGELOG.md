@@ -4,6 +4,34 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.7] — Track 0 (T0-11): unblock CI/CD deploy — 3 IAM/API fixes (2026-05-13)
+
+100% des runs Deploy CI/CD ont silencieusement échoué depuis T0-6 (PR #36). Surface live `https://shoot-ai-dev-chf52ondba-uc.a.run.app` tournait toujours sur l'image manuelle SHA `2ce8474`, **sans** les fixes T0-5/T0-3/T0-9. Cascade de 3 root causes débloquées par cette PR.
+
+### Fixed
+- **`infra/terraform/iam.tf`** — nouvelle ressource `google_storage_bucket_iam_member.cicd_tfstate`
+  - Le SA `shoot-ai-dev-cicd` n'avait aucune IAM sur le bucket `gs://shoot-ai-poc-tfstate`, créé out-of-Terraform par `bootstrap.sh`. PR #29 initiale n'avait jamais ajouté cette binding car le chicken-and-egg du backend GCS empêche le manage du bucket par TF
+  - Rôle `roles/storage.admin` (pas `objectAdmin` — Gemini finding ACCEPTED) : le backend GCS appelle `storage.buckets.get` durant `terraform init` pour vérifier le versioning. `objectAdmin` n'a pas cette permission, `storage.admin` oui. Scoped au bucket via `google_storage_bucket_iam_member` (pas project-wide)
+  - Référence `google_project.shoot_ai.project_id` au lieu de `var.project_id` (Gemini finding 2 ACCEPTED) — cohérence avec le reste de `iam.tf` + dependency graph carry désormais cette binding
+- **`infra/terraform/project.tf`** — `cloudresourcemanager.googleapis.com` ajouté à la liste des APIs
+  - Pendant le bootstrap T0-6, mes credentials Owner activaient implicitement cette API. Le SA cicd ne l'a pas implicitement → chaque `terraform plan` failait sur `Error 403: Cloud Resource Manager API has not been used in project 592121247070`
+  - 8e API maintenant : `run`, `artifactregistry`, `secretmanager`, `iam`, `cloudbuild`, `iamcredentials`, `sts`, `cloudresourcemanager`
+
+### Hot-fixes appliqués hors-PR (à formaliser en T0-12)
+- `gcloud services enable cloudresourcemanager.googleapis.com --project=shoot-ai-poc`
+- `gcloud storage buckets {remove,add}-iam-policy-binding gs://shoot-ai-poc-tfstate ... role=roles/storage.{objectAdmin,admin}` (upgrade after Gemini finding)
+- `gcloud projects add-iam-policy-binding shoot-ai-poc --member=...cicd... --role=roles/editor` — round 4 surfaced new perms missing (`iam.serviceAccounts.get`, `serviceusage.services.list`, project IAM read). Pragmatic POC choice (vs adding 3-4 narrower roles separately). À resserrer en T0-12 follow-up
+
+### Notes Gemini Code Assist
+- 2 findings MEDIUM sur le PR initial — **tous ACCEPTED** (storage.admin vs objectAdmin, project ref vs var ref). **Gemini a anticipé le 3e fix nécessaire** (cloudresourcemanager API) que je n'avais pas vu venir — confirmation que le challenge protocol CLAUDE.md a une vraie valeur prédictive
+- Validation finale Gemini : *"La correction apportée dans `project.tf` pour inclure `cloudresourcemanager.googleapis.com` est la bonne approche, car Terraform a effectivement besoin de cette API pour effectuer les appels de découverte de ressources lors de chaque plan et apply. Ton choix de restreindre `roles/storage.admin` au bucket spécifique via `google_storage_bucket_iam_member` est également conforme aux meilleures pratiques de moindre privilège. ... Tout semble prêt pour le merge."*
+
+### Follow-up
+- **T0-12 (nouveau)** Formaliser le `roles/editor` ajouté en hot-fix dans `iam.tf`. Idéalement substitué par 3 rôles plus étroits (`roles/iam.serviceAccountAdmin`, `roles/serviceusage.serviceUsageAdmin`, `roles/resourcemanager.projectIamAdmin`) — pas prioritaire en POC zero-budget mais nécessaire avant prod
+
+### Impact opérationnel
+Le prochain push sur main devrait désormais déployer correctement le code v1.0.6 (avec T0-5 fixes + T0-3 narrow exceptions + T0-9 YOLO baked) sur Cloud Run.
+
 ## [1.0.6] — Track 0 (T0-9): bake YOLO pose weights into Docker image (2026-05-12)
 
 Follow-up T0-6 identifié sur la live test Cloud Run : cold-start de chaque nouvelle instance téléchargeait `yolo11n-pose.pt` (~6 MB) depuis GitHub avant le 1er `/analyze`. Avec scale-to-zero, ce coût frappait la majorité des requêtes POC.
