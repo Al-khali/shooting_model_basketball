@@ -4,6 +4,44 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.8] — Track 0 (T0-13): billing lifecycle + cloudbilling API (round 5) (2026-05-13)
+
+Round 5 du débloquage CI/CD. T0-11 (v1.0.7) avait débloqué 3 root causes (storage.admin IAM + cloudresourcemanager API + project ref). Le re-run Deploy a re-failed sur deux nouveaux gates structurels — fixés par cette PR.
+
+### Fixed
+- **`infra/terraform/project.tf`** — `lifecycle { ignore_changes = [billing_account] }` sur `google_project.shoot_ai`
+  - `terraform.tfvars` contient `billing_account = "XXXXXX-XXXXXX-XXXXXX"` (placeholder délibéré pour ne pas committer le vrai ID en git)
+  - Le workflow `deploy.yml` ne passe pas `-var="billing_account=..."` à Terraform — donc le tfvars placeholder était lu directement
+  - À chaque CI plan, Terraform comparait `tfvars XXXXXX-...` vs `state 01E0C6-...` (importé pendant T0-6) → voulait swap → API call setBillingAccount → 403 même avec l'API activée car placeholder = invalid
+  - Pendant T0-6 j'avais passé `-var="billing_account=01E0C6-..."` explicite via CLI ; le CI n'a pas ce passe-droit
+  - Justification `ignore_changes` : **billing = setup one-time bootstrap.sh par l'opérateur**, pas managed runtime. Le state contient déjà la vraie valeur via `terraform import`. Le placeholder dans tfvars existe uniquement pour que `terraform plan -var-file=` parse cleanly
+- **`cloudbilling.googleapis.com`** ajouté aux APIs activées par Terraform (9e API)
+  - Même avec ignore_changes, le provider issue un Get sur l'association billing lors de chaque refresh
+  - Mes credentials Owner avaient activé l'API implicitement pendant T0-6 ; le SA cicd ne l'a pas
+
+### Hot-fix appliqué hors-PR
+- `gcloud services enable cloudbilling.googleapis.com --project=shoot-ai-poc`
+
+Les `google_project_service` resources pour cloudresourcemanager + cloudbilling, plus le `google_storage_bucket_iam_member.cicd_tfstate` de T0-11, seront tous reconcilés dans le state au prochain CI apply — idempotent avec la réalité GCP.
+
+### Cascade de débloquage CI/CD — bilan
+5 root causes empêchaient le Deploy depuis T0-6 (2026-05-12). Trail complet :
+
+| # | Round | Issue | Fix | Discovery |
+|---|-------|-------|-----|-----------|
+| 1 | T0-11 initial | SA cicd manque IAM tfstate bucket | `roles/storage.objectAdmin` binding | Logs CI |
+| 2 | Gemini #38 | `objectAdmin` n'a pas `storage.buckets.get` | Upgraded `roles/storage.admin` | Gemini review |
+| 3 | Post-T0-11 | `cloudresourcemanager.googleapis.com` désactivée | Ajoutée à project.tf | Deploy re-run logs |
+| 4 | Round 4 hot-fix | SA cicd ne peut pas lire SAs/services/IAM | `roles/editor` (T0-12 follow-up) | Deploy re-run logs |
+| 5 | **Round 5 (cette PR)** | `billing_account` placeholder drift + `cloudbilling` API | `ignore_changes` + API à list | Deploy re-run logs |
+
+### Notes Gemini Code Assist
+- PR #39 sans review (silence 5+ min depuis création) — selon CLAUDE.md §protocole, silence vaut acquiescement. Probable comportement Gemini Code Assist sur fichiers HCL purs après les reviews substantielles déjà faites sur PR #36 et #38 dans le même fichier
+
+### Follow-ups Track 0
+- **T0-12** — formaliser le `roles/editor` (round 4) en plus narrow roles dans `iam.tf`
+- **T0-13** — *(this PR)*
+
 ## [1.0.7] — Track 0 (T0-11): unblock CI/CD deploy — 3 IAM/API fixes (2026-05-13)
 
 100% des runs Deploy CI/CD ont silencieusement échoué depuis T0-6 (PR #36). Surface live `https://shoot-ai-dev-chf52ondba-uc.a.run.app` tournait toujours sur l'image manuelle SHA `2ce8474`, **sans** les fixes T0-5/T0-3/T0-9. Cascade de 3 root causes débloquées par cette PR.

@@ -119,11 +119,12 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 - [x] **T0-6** Bootstrap GCP réel — projet `shoot-ai-poc` live à `https://shoot-ai-dev-chf52ondba-uc.a.run.app`, 25 ressources Terraform créées, 5 GitHub secrets configurés, `deletion_protection` environment-conditional (PR #36 / v1.0.4)
 - [x] **T0-3/T0-7** Narrow exceptions (3 sites) + VLM retry/timeout avec full jitter (AWS pattern) + 7 tests unitaires retry. Rebase clean post-T0-5 (PR #34 / v1.0.5). 190 tests total.
 - [x] **T0-9** YOLO `yolo11n-pose.pt` pre-fetched + baked dans l'image Docker. +50 MB image, ~500ms-2s économisés au cold-start. Premier REJECT challenger validé par Gemini (PR #37 / v1.0.6)
-- [x] **T0-11** Unblock CI/CD deploy — 3 IAM/API fixes (storage.admin binding sur tfstate bucket, cloudresourcemanager.googleapis.com API, project ref vs var). Cascade de 3 root causes débloquée par les 2 findings Gemini + un 3e fix anticipé par sa review (PR #38 / v1.0.7)
+- [x] **T0-11** Unblock CI/CD deploy round 1-3 — `storage.admin` binding sur tfstate bucket, `cloudresourcemanager.googleapis.com` API, project ref vs var. Cascade débloquée par 2 findings Gemini + 1 fix anticipé (PR #38 / v1.0.7)
+- [x] **T0-13** Unblock CI/CD deploy round 5 — `ignore_changes = [billing_account]` (placeholder dans tfvars créait drift à chaque CI apply) + `cloudbilling.googleapis.com` API. Cascade complète des 5 root causes documentée (PR #39 / v1.0.8)
 - [ ] **T0-4** Dependabot alert #228 — CVE-2025-69872 DiskCache MEDIUM, pas de patch upstream, ignore-rule à documenter
-- [ ] **T0-8** (follow-up T0-6) `/unknown` route retourne 401 au lieu de 404 — middleware auth runs before routing
-- [ ] **T0-10** (optionnel follow-up T0-9) Centraliser le choix YOLO via `ARG`/`ENV`/`os.getenv()` quand un besoin réel de switch apparaît
-- [ ] **T0-12** (nouveau follow-up T0-11) Formaliser le `roles/editor` du SA cicd en hot-fix dans `iam.tf`. Idéalement substitué par 3 rôles plus étroits (`iam.serviceAccountAdmin`, `serviceusage.serviceUsageAdmin`, `resourcemanager.projectIamAdmin`)
+- [ ] **T0-8** (follow-up T0-6) `/unknown` route retourne 401 au lieu de 404
+- [ ] **T0-10** (optionnel follow-up T0-9) Centraliser le choix YOLO via `ARG`/`ENV`/`os.getenv()`
+- [ ] **T0-12** (follow-up T0-11) Formaliser le `roles/editor` du SA cicd dans `iam.tf` (idéalement narrow roles : iam.serviceAccountAdmin + serviceusage.serviceUsageAdmin + resourcemanager.projectIamAdmin)
 
 ---
 
