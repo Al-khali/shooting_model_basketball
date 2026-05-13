@@ -15,6 +15,20 @@ resource "google_project" "shoot_ai" {
   project_id      = var.project_id
   billing_account = var.billing_account
   labels          = local.common_labels
+
+  # `billing_account` is a one-time setup decision performed during
+  # bootstrap.sh and persisted to state via `terraform import`. The repo's
+  # default tfvars holds a placeholder ("XXXXXX-XXXXXX-XXXXXX") so the real
+  # ID never lands in git — but every CI apply would then read that
+  # placeholder and try to *swap* the project's billing account to it,
+  # which (a) is wrong and (b) requires `cloudbilling.googleapis.com` to
+  # call `setBillingAccount`. The CI service account doesn't drive the
+  # billing lifecycle, the operator does (out-of-Terraform), so we mark
+  # the field as ignored after import. The state still holds the real
+  # account ID and Cloud Run keeps billing through it.
+  lifecycle {
+    ignore_changes = [billing_account]
+  }
 }
 
 resource "google_project_service" "apis" {
@@ -27,6 +41,7 @@ resource "google_project_service" "apis" {
     "iamcredentials.googleapis.com",       # Workload Identity Federation
     "sts.googleapis.com",                  # Security Token Service (WIF)
     "cloudresourcemanager.googleapis.com", # Required for the google_project data lookups Terraform performs on every plan/apply; without it the CI SA hits HTTP 403 during `terraform plan`
+    "cloudbilling.googleapis.com",         # Required for any read/write on the project's billing link (even with ignore_changes, the provider still issues a Get on the billing association during refresh)
   ])
 
   project            = google_project.shoot_ai.project_id
