@@ -95,15 +95,20 @@ resource "google_service_account_iam_member" "cicd_act_as_run" {
   member             = "serviceAccount:${google_service_account.cicd.email}"
 }
 
-# CI/CD needs read+write on the tfstate bucket so `terraform init/plan/apply`
-# can list, read, and update the state object during deploys. Without this,
-# every CI run fails at `terraform init` with HTTP 403 on
-# `storage.objects.list`. The bucket itself is created by `bootstrap.sh`
-# (out-of-Terraform, chicken-and-egg with the backend block in main.tf),
-# so we reference it by its conventional name `${project_id}-tfstate`
-# rather than attempting to manage the bucket resource here.
+# CI/CD needs full bucket access (objects + metadata) for the GCS Terraform
+# backend. `roles/storage.objectAdmin` allows object operations but the
+# backend also calls `storage.buckets.get` during `terraform init` to check
+# versioning state — that permission lives in `roles/storage.admin`. Scoped
+# to this single bucket via `google_storage_bucket_iam_member`, not project-
+# wide, so we don't accidentally grant admin on other buckets.
+#
+# The bucket itself is created by `bootstrap.sh` out-of-Terraform
+# (chicken-and-egg with the backend block in main.tf), so we reference it
+# by its conventional name `${project_id}-tfstate` derived from the project
+# resource — consistent with the rest of this file which all chains through
+# `google_project.shoot_ai`.
 resource "google_storage_bucket_iam_member" "cicd_tfstate" {
-  bucket = "${var.project_id}-tfstate"
-  role   = "roles/storage.objectAdmin"
+  bucket = "${google_project.shoot_ai.project_id}-tfstate"
+  role   = "roles/storage.admin"
   member = "serviceAccount:${google_service_account.cicd.email}"
 }

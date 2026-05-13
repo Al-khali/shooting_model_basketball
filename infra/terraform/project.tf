@@ -24,8 +24,9 @@ resource "google_project_service" "apis" {
     "secretmanager.googleapis.com",
     "iam.googleapis.com",
     "cloudbuild.googleapis.com",
-    "iamcredentials.googleapis.com", # Workload Identity Federation
-    "sts.googleapis.com",            # Security Token Service (WIF)
+    "iamcredentials.googleapis.com",       # Workload Identity Federation
+    "sts.googleapis.com",                  # Security Token Service (WIF)
+    "cloudresourcemanager.googleapis.com", # Required for the google_project data lookups Terraform performs on every plan/apply; without it the CI SA hits HTTP 403 during `terraform plan`
   ])
 
   project            = google_project.shoot_ai.project_id
