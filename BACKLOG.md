@@ -28,8 +28,8 @@ Post-audit v1.0.0 : 7 tracks parallèles pour passer la plateforme à la prochai
 
 ### Track 1 — Challenge qualif tech *(P1 — 3-5 jours)*
 
-- [ ] **T1-1** Critique structurée du doc `docs/agentic-frameworks-comparison.md` (cost realism, lock-in réel, Live API gaps, Qwen streaming non démontré, abstraction provider absente, etc.)
-- [ ] **T1-2** ADR-001 — décision finale archi agents + couche d'isolation provider (AI Gateway/LiteLLM, abstraction `MemoryService`)
+- [x] **T1-1** Critique structurée du doc — 10 findings dont 3 HIGH étayés par `grep` sur src/ (Live API pas codée, Agent Runtime pas déployée, Memory Bank en JSON local). Gemini ack avec 3 fixes cohérence → **livré v1.0.10 (PR #41)**
+- [x] **T1-2** ADR-001 — 5 décisions formelles (D1 garder ADK, D2 déférer Agent Runtime, D3 AI Gateway, D4 Memory Bank en 2 paliers, D5 doc révisé) + révision `agentic-frameworks-comparison.md` avec sections "Stack actuelle vs cible" et "Risques résiduels". Génère T3-1 (AI Gateway impl) → **livré v1.0.10**
 
 ### Track 2 — Reliability + observability *(P1 — 5-7 jours)*
 
