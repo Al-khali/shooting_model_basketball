@@ -131,8 +131,8 @@ Ces 4 sections rendent la trajectoire d'adoption lisible à un opérateur extér
 Suivi opérationnel :
 - **Track 3 T3-1** (à ouvrir) : POC AI Gateway LiteLLM Proxy en sidecar Cloud Run
 - **Track 2 T2-3** (déjà au backlog) : Firestore PlayerMemoryService — bumper en P1 après T1-2
-- **Track 0 T0-14** : sync pyproject version au bump CHANGELOG (le `/health` retourne encore 1.0.3 alors que CHANGELOG est à 1.0.9)
-- **Phase 6 dédiée** (déjà au roadmap) : si la valeur produit Live API streaming est confirmée, alors démarrer ADR-002 sur Agent Runtime
+- **Track 0 T0-14** : sync pyproject version au bump CHANGELOG (le `/health` retourne encore 1.0.3 alors que CHANGELOG est à 1.0.10)
+- **Track 6 dédiée** (déjà au roadmap) : si la valeur produit Live API streaming est confirmée, alors démarrer ADR-002 sur Agent Runtime
 
 ---
 
@@ -140,7 +140,7 @@ Suivi opérationnel :
 
 - [T1-1 PR #41](https://github.com/Al-khali/shooting_model_basketball/pull/41) — Critique structurée du doc qualif (10 findings)
 - [T0-15 PR #40](https://github.com/Al-khali/shooting_model_basketball/pull/40) — Cloud Run cpu_idle false (a révélé l'incompatibilité bg task / autoscale)
-- [Programme v2.0](../../../.claude/plans/) — plan complet (7 tracks)
+- [Programme v2.0](../../.claude/plans/) — plan complet (7 tracks)
 - [LiteLLM Proxy](https://docs.litellm.ai/docs/proxy/quick_start) — AI Gateway open-source recommandé
 - [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) — alternative managed
 - [Google ADK 2.0](https://google.github.io/adk-docs/) — documentation officielle (status quo D1)
