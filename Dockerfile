@@ -48,8 +48,12 @@ RUN .venv/bin/python -c "from ultralytics import YOLO; YOLO('yolo11n-pose.pt')"
 # ──────────────────────────────────────────────────────────────────────────────
 FROM --platform=linux/amd64 python:3.12-slim AS runtime
 
-# libgl1 + libglib2.0-0 required by OpenCV (transitive via ultralytics/mediapipe)
+# libgl1 + libglib2.0-0 required by OpenCV (transitive via ultralytics/mediapipe).
+# `upgrade` picks up published Debian security updates not yet in the base
+# layer (e.g. libcap2 CVE-2026-4878, libsystemd0 CVE-2026-29111 surfaced by
+# Trivy on the python:3.12-slim image). Trivy gates the build on HIGH/CRITICAL.
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 

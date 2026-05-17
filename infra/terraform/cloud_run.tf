@@ -40,8 +40,12 @@ resource "google_cloud_run_v2_service" "api" {
           cpu    = var.cloud_run_cpu
           memory = var.cloud_run_memory
         }
-        cpu_idle          = true # only charge CPU when processing requests
-        startup_cpu_boost = true # extra CPU during cold start
+        # CPU must stay always-on: the analyze pipeline runs in a FastAPI
+        # BackgroundTask after the HTTP response, exactly when `cpu_idle =
+        # true` would throttle. Track 2 (Cloud Tasks dispatch) will decouple
+        # from request lifecycle and allow re-enabling cpu_idle.
+        cpu_idle          = false
+        startup_cpu_boost = true
       }
 
       ports {
@@ -72,6 +76,15 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "LOG_LEVEL"
         value = "INFO"
+      }
+
+      # appuser's home dir isn't writable (chown only covered /app), so the
+      # default $HOME/.config/Ultralytics path fails. Point ultralytics at
+      # /tmp explicitly to skip the warning + implicit fallback on each
+      # cold start.
+      env {
+        name  = "YOLO_CONFIG_DIR"
+        value = "/tmp/Ultralytics"
       }
 
       env {
