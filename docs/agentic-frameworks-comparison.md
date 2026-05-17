@@ -658,6 +658,15 @@ agent.run("Analyse la technique de tir depuis ces frames")
 
 ## Recommandation finale pour AI Shoot
 
+> **🛈 Mise à jour 2026-05-18** : la recommandation a été révisée suite à l'audit T1-1 (`docs/agentic-frameworks-critique.md`) et formalisée dans **[ADR-001](./adr/001-agentic-architecture.md)**. Résumé :
+>
+> - **Garder ADK** comme orchestrateur d'agents (status quo OK)
+> - **Déférer Agent Runtime** jusqu'à preuve d'usage Live API en production
+> - **Introduire un AI Gateway** (LiteLLM Proxy) pour failover Gemini → Claude/GPT
+> - **Migration Memory Bank en deux paliers** : Firestore (multi-instance safe) avant adoption Memory Bank managed
+>
+> Voir les sections **"Stack actuelle vs cible"** et **"Risques résiduels et mitigations"** ci-dessous pour la version opérationnelle de cette recommandation.
+
 ### 🥇 Recommandation principale : Google ADK + Vertex AI Stack
 
 **Pourquoi :**
@@ -706,6 +715,120 @@ Puisqu'**ADK intègre déjà `langgraph>=0.2.60`** dans ses extensions :
 4. **LangSmith pour l'observabilité** des deux (framework-agnostic)
 
 Cette architecture scale de startup à enterprise avec migration minimale.
+
+---
+
+## Stack actuelle vs cible
+
+Section ajoutée 2026-05-18 (ADR-001). Vise à rendre lisible la différence entre ce qui tourne en production aujourd'hui (v1.0.9) et la trajectoire d'adoption envisagée.
+
+### Stack actuelle (v1.0.9, validée le 2026-05-18)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  App ──HTTPS──→ Cloud Run v2 (us-central1, scale 0-2)       │
+│                  │                                          │
+│  ┌───────────────▼──────────────────────────────────────┐   │
+│  │  FastAPI + APIKeyMiddleware                          │   │
+│  │  POST /analyze → BackgroundTasks (cpu_idle = false)  │   │
+│  │  └→ ShotAnalysisPipeline (orchestrator.py, sync)     │   │
+│  │     ├── extract_shot_frames (VideoProcessor + YOLO)  │   │
+│  │     ├── compute_biomechanics                         │   │
+│  │     ├── generate_coaching_feedback                   │   │
+│  │     │   └→ GeminiFlashClient (retry + full jitter)   │   │
+│  │     │      └→ Gemini 2.5 Flash (direct API)          │   │
+│  │     └── build_training_plan                          │   │
+│  │                                                      │   │
+│  │  PlayerMemoryService → data/players/<id>.json        │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                             │
+│  Storage : GCS (tfstate), Artifact Registry (images)        │
+│  Secrets : Secret Manager (Gemini key + API keys)           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Caractéristiques opérationnelles** :
+- `min_instance_count = 0` (scale-to-zero pour POC zero-budget)
+- `cpu_idle = false` (T0-15 — sinon background task throttle)
+- Memory store JSON local **non multi-instance safe** : si Cloud Run scale-out vers 2 instances, les sessions stockées sur l'instance #1 sont invisibles à l'instance #2
+- Pas de failover provider : si Gemini est down → tout `/analyze` failure
+- Mesure live : `status=error` (no_shootable_content) en 31s sur `testsrc` stub video — chain end-to-end fonctionnelle
+
+### Stack cible court terme (D3 + D4 de l'ADR-001)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  App ──HTTPS──→ Cloud Run v2 (us-central1)                  │
+│                  │                                          │
+│  ┌───────────────▼──────────────────────────────────────┐   │
+│  │  FastAPI                                             │   │
+│  │  POST /analyze → BackgroundTasks                     │   │
+│  │  └→ ShotAnalysisPipeline                             │   │
+│  │     └→ GeminiFlashClient                             │   │
+│  │        │                                             │   │
+│  │  ┌─────▼─────────────────────────────────┐           │   │
+│  │  │  AI Gateway (LiteLLM Proxy sidecar)   │           │   │
+│  │  │  Primary : Gemini 2.5 Flash           │           │   │
+│  │  │  Fallback 1 : Claude Haiku 4.5        │           │   │
+│  │  │  Fallback 2 : GPT-4o-mini             │           │   │
+│  │  │  Cross-provider prompt caching        │           │   │
+│  │  └───────────────────────────────────────┘           │   │
+│  │                                                      │   │
+│  │  PlayerMemoryService → Firestore (multi-instance)    │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Bénéfices vs stack actuelle** :
+- Multi-instance safe (`scale 0-N` sans perte d'état joueur)
+- Provider failover transparent — Gemini down ne fait pas tomber `/analyze`
+- Cost tracking unifié par provider et par player_id
+- Pas de migration framework (toujours ADK + Cloud Run + Gemini-default)
+
+**Effort estimé** : Track 2 T2-3 (Firestore) + Track 3 T3-1 (AI Gateway) ≈ 2 PRs.
+
+### Stack théorique premium (différée — D2 de l'ADR-001)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  App ──WebSocket──→ Cloud Run API Gateway                   │
+│                       │                                     │
+│  ┌────────────────────▼─────────────────────────────────┐   │
+│  │  Vertex AI Agent Runtime (serverless)                │   │
+│  │  ├── ShotOrchestrator (LlmAgent gemini-2.5-flash)   │   │
+│  │  ├── VideoStreamAgent (BaseAgent + LiveRequestQueue) │   │
+│  │  ├── PoseAnalyzer (LlmAgent)                         │   │
+│  │  ├── ShotClassifier (LlmAgent flash-lite)            │   │
+│  │  └── FeedbackAgent (LlmAgent flash premium)          │   │
+│  │                                                      │   │
+│  │  Session Service (per-player state)                  │   │
+│  │  Memory Bank (cross-session history)                 │   │
+│  │  Cloud Trace + Cloud Monitoring (OTel natif)         │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Conditions de bascule** (toutes doivent être remplies) :
+1. POC réel de `LiveRequestQueue` + `AsyncGenerator` shippé dans `src/agents/` (pas un commentaire docstring)
+2. Valeur produit du streaming temps réel mesurée (vs batch async actuel) — entretien utilisateur ou A/B test
+3. Volume justifie le coût Agent Runtime (le run minimal facturé est > Cloud Run scale-to-zero)
+4. Acceptation explicite du lock-in GCP renforcé (Memory Bank n'a pas d'équivalent open-source direct)
+
+---
+
+## Risques résiduels et mitigations
+
+Section ajoutée 2026-05-18 (ADR-001). Recense les 5 risques opérationnels identifiés par l'audit T1-1 et leurs mitigations.
+
+| # | Risque | Sévérité | Probabilité | Mitigation court terme | Mitigation long terme |
+|---|--------|----------|-------------|-----------------------|------------------------|
+| **R1** | Gemini API down (incident Vertex AI, quota dur, safety filter block prolongé) | 🔴 HIGH (panne complète /analyze) | Medium (~1-2× /trimestre vu historique 2024-2026) | T0-3 retry + jitter (✓ shipped v1.0.5) | **AI Gateway T3-1** (failover Claude / GPT-4o-mini) |
+| **R2** | Cloud Run scale-out perd les sessions joueur | 🟠 MEDIUM (UX dégradée — re-explication coaching à chaque scale) | High (à chaque pic de trafic) | min_instance_count=1 (~$10/mois) temporaire | **Firestore PlayerMemoryService T2-3** |
+| **R3** | Cost overrun Gemini (vidéo HD prolongée, profile non anticipé) | 🟠 MEDIUM (facture inattendue) | Low (POC, volume contrôlé) | Quota Vertex AI configuré au minimum + budget alert | AI Gateway cost tracking + per-player rate limit |
+| **R4** | Live API quota exhaustion si on adopte D2 | 🟡 LOW (POC tant que D2 différé) | N/A actuellement | N/A — D2 différé | Fallback batch mode si streaming quota épuisé |
+| **R5** | Memory Bank migration plus complexe que "single-file change" | 🟡 LOW (POC tant que D2 différé) | N/A actuellement | N/A — D2 différé | Migration en 2 paliers (D4) avec validation Firestore d'abord |
+
+**Verdict global** : les risques HIGH et MEDIUM ont une **mitigation immédiate sans changer d'archi**. Le reste devient pertinent uniquement si on adopte D2 (Agent Runtime). C'est un signal que l'architecture actuelle est plus robuste qu'elle n'en a l'air, à condition d'implémenter T2-3 et T3-1.
 
 ---
 

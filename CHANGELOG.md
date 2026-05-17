@@ -4,6 +4,43 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.10] — Track 1 (T1-1 + T1-2): challenge qualif tech + ADR-001 (2026-05-18)
+
+Programme v2.0 — première moitié de Track 1 (challenge stratégique). Deux PRs :
+
+### Added — T1-1 (PR #41)
+- **`docs/agentic-frameworks-critique.md`** — critique structurée du doc qualif (10 findings)
+  - 3 HIGH étayés par `grep` sur le code : Live API pas implémentée (zéro `LiveRequestQueue` dans `src/`), Agent Runtime pas déployée (Cloud Run à la place), Session/Memory Bank en JSON local (pas managed)
+  - 4 MEDIUM : lock-in pas gradué (3 paliers collapsed en un seul label), aucune stratégie fallback Gemini, Qwen2-VL via LiteLLM non démontré en streaming, comparaison coût ADK vs LangGraph apples-to-oranges
+  - 3 LOW : AI Gateway / proxy provider absent du doc, Memory Bank "single-file change" sous-évalué, coûts pas reproductibles (profil shot 5s vs match 10min varie 10-30×)
+  - Verdict : ADK choice **stands**, mais le doc oversell la stack et minimise les risques
+- 3 fixes cohérence Gemini Code Assist (sévérité Finding 8, harmonisation header "Réalité shippée")
+
+### Added — T1-2 (this PR)
+- **`docs/adr/001-agentic-architecture.md`** — ADR-001 formelle. 5 décisions :
+  - **D1** Conserver ADK 2.0 comme orchestrateur d'agents (status quo)
+  - **D2** Déférer Agent Runtime jusqu'à preuve d'usage Live API en production (critères de bascule explicites)
+  - **D3** Introduire un AI Gateway (LiteLLM Proxy en sidecar Cloud Run) — failover Gemini → Claude/GPT, cost tracking unifié, prompt caching cross-provider
+  - **D4** Migration Memory Bank en deux paliers (Firestore intermédiaire multi-instance safe, avant adoption Memory Bank managed)
+  - **D5** Documenter stack actuelle vs cible + risques résiduels (sections ajoutées au doc qualif)
+- **`docs/agentic-frameworks-comparison.md`** — révisé :
+  - Section "Recommandation finale" : point d'entrée vers ADR-001
+  - Nouvelle section **"Stack actuelle vs cible"** (3 ASCII diagrams : v1.0.9 actuelle, cible court terme D3+D4, théorique premium D2 différée)
+  - Nouvelle section **"Risques résiduels et mitigations"** (5 risques R1-R5 — sévérité × probabilité × mitigation court terme × long terme)
+
+### Follow-ups directement issus de l'ADR-001
+- **Track 3 T3-1 (nouveau)** : POC AI Gateway LiteLLM Proxy sidecar Cloud Run + fallback config Claude Haiku 4.5 + GPT-4o-mini
+- **Track 2 T2-3** (déjà au backlog) : Firestore-backed PlayerMemoryService — bump P1 après cette ADR
+- **Track 0 T0-14** : sync pyproject version — `/health` retourne encore 1.0.3 alors que CHANGELOG est à 1.0.10
+
+### Notes Gemini Code Assist
+- T1-1 (PR #41) : 3 findings cohérence MEDIUM, tous ACCEPTED. Final ack : *"La correction des sévérités et l'harmonisation de la terminologie 'Réalité shippée' renforcent la clarté et la crédibilité de cette critique technique."*
+
+### Métadonnées
+- **Verdict T1-1** : 10 findings dont 3 HIGH étayés par `grep` sur le code shippé ; ADK choice stands
+- **Verdict T1-2** : ADR-001 statut Accepted ; 5 décisions formelles ; 5 risques recensés
+- **Track 1 status** : 2/2 tickets shippés (T1-1 mergé v1.0.10, T1-2 cette PR)
+
 ## [1.0.9] — Track 0 (T0-15): unblock bg pipeline live + Debian DSAs (2026-05-17)
 
 Premier vrai live test du déploiement post-T0-9 (run 25806841738) a révélé que le bg pipeline restait stuck en `processing` pendant 3+ minutes — pas un bug du baking YOLO mais une incompatibilité architecturale entre `BackgroundTasks` et `cpu_idle=true`. Cette PR débloque le live + corrige 2 CVE HIGH fixed-upstream apparues entre-temps.
