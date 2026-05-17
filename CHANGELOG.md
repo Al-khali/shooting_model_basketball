@@ -4,6 +4,32 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.9] — Track 0 (T0-15): unblock bg pipeline live + Debian DSAs (2026-05-17)
+
+Premier vrai live test du déploiement post-T0-9 (run 25806841738) a révélé que le bg pipeline restait stuck en `processing` pendant 3+ minutes — pas un bug du baking YOLO mais une incompatibilité architecturale entre `BackgroundTasks` et `cpu_idle=true`. Cette PR débloque le live + corrige 2 CVE HIGH fixed-upstream apparues entre-temps.
+
+### Fixed
+- **`infra/terraform/cloud_run.tf`** — `cpu_idle = false` (était `true` par défaut depuis T0-6)
+  - Cloud Run throttle le CPU hors requêtes HTTP. POST `/analyze` répond 202 immédiatement puis FastAPI `BackgroundTasks` lance le pipeline lourd — exactement quand le throttle kick-in
+  - Mesuré sur la précédente live test : YOLO `__init__` seul a pris ~3 min vs ~10s attendus
+  - Cost delta marginal en POC : `min_instance_count=0` (scale-to-zero) reste actif ; le change affecte uniquement le billing CPU pendant qu'une instance est alive
+  - **Fix architectural** = T2-3 (TaskStore Firestore + Cloud Tasks pour découpler HTTP/workload — alors on pourra revenir à `cpu_idle = true`)
+- **`infra/terraform/cloud_run.tf`** — nouvelle env var `YOLO_CONFIG_DIR = "/tmp/Ultralytics"`
+  - Le Dockerfile chowns `/app` à appuser mais home dir reste root. Default `$HOME/.config/Ultralytics` failure → ultralytics fallback `/tmp` avec warning à chaque cold start
+  - Skip le fallback dance, plus de warning log
+- **`Dockerfile`** runtime stage — `apt-get upgrade -y --no-install-recommends` entre `update` et `install libgl1 libglib2.0-0`
+  - Trivy CI gate a flag 2 CVE HIGH fixed-upstream dans `python:3.12-slim` : `libcap2 CVE-2026-4878` (1:2.75-10+b8 → 1:2.75-10+deb13u1), `libsystemd0 CVE-2026-29111` (257.9-1~deb13u1 → 257.13-1~deb13u1)
+  - Debian DSAs publiées récemment ; base layer pas refresh. `apt-get upgrade` pull les fixes au build time
+
+### Notes Gemini Code Assist
+- 2 findings sur la verbosité des comments terraform (HIGH + MEDIUM) — **tous ACCEPTED**, raccourcis tout en gardant les pointeurs opérationnels (Track 2 follow-up, pourquoi YOLO_CONFIG_DIR)
+- Validation finale Gemini : *"Les modifications apportées à `cloud_run.tf` et au `Dockerfile` répondent bien aux problématiques de performance et de sécurité identifiées. Le plan de déploiement et de vérification semble solide. Je n'ai plus d'autres remarques."*
+
+### Verification attendue post-deploy
+- POST `/analyze` + poll `/session` → `status=error` (no_shootable_content depuis testsrc) en **≤30s** (vs 3+ min observé pré-T0-15)
+- Pas de warning "Ultralytics user config directory not writable" dans logs
+- "Pipeline start" log visible juste après POST (preuve que le bg task démarre maintenant avec du CPU)
+
 ## [1.0.8] — Track 0 (T0-13): billing lifecycle + cloudbilling API (round 5) (2026-05-13)
 
 Round 5 du débloquage CI/CD. T0-11 (v1.0.7) avait débloqué 3 root causes (storage.admin IAM + cloudresourcemanager API + project ref). Le re-run Deploy a re-failed sur deux nouveaux gates structurels — fixés par cette PR.
