@@ -40,18 +40,12 @@ resource "google_cloud_run_v2_service" "api" {
           cpu    = var.cloud_run_cpu
           memory = var.cloud_run_memory
         }
-        # cpu_idle = true would throttle the CPU outside HTTP request handling.
-        # That kills FastAPI BackgroundTasks: POST /analyze returns 202 first
-        # and the heavy pipeline (pose estimation + biomech + VLM) runs *after*
-        # the response — exactly when cpu_idle starts throttling. The T0-9
-        # live test measured ~3 min for the YOLO init alone with throttling on
-        # (vs ~10s expected). Until T2-3 migrates the job dispatch to Cloud
-        # Tasks (decoupled from HTTP lifecycle), the bg pattern needs full CPU
-        # always-on. The cost delta is marginal at POC volume (min=0 scale-to-
-        # zero still applies; the change just affects CPU billing *while an
-        # instance is alive*).
+        # CPU must stay always-on: the analyze pipeline runs in a FastAPI
+        # BackgroundTask after the HTTP response, exactly when `cpu_idle =
+        # true` would throttle. Track 2 (Cloud Tasks dispatch) will decouple
+        # from request lifecycle and allow re-enabling cpu_idle.
         cpu_idle          = false
-        startup_cpu_boost = true # extra CPU during cold start
+        startup_cpu_boost = true
       }
 
       ports {
@@ -84,14 +78,10 @@ resource "google_cloud_run_v2_service" "api" {
         value = "INFO"
       }
 
-      # `ultralytics` writes a settings.json to the user config dir on first
-      # import. The default is `$HOME/.config/Ultralytics`, which inside the
-      # container is `/home/appuser/.config/...` — not writable by appuser
-      # because the COPY chain in the Dockerfile only chowned `/app`, not the
-      # home directory. Without this override ultralytics emits a warning and
-      # silently falls back to /tmp/Ultralytics on every cold start. Setting
-      # the env var directly avoids the warning AND the implicit fallback
-      # dance.
+      # appuser's home dir isn't writable (chown only covered /app), so the
+      # default $HOME/.config/Ultralytics path fails. Point ultralytics at
+      # /tmp explicitly to skip the warning + implicit fallback on each
+      # cold start.
       env {
         name  = "YOLO_CONFIG_DIR"
         value = "/tmp/Ultralytics"
