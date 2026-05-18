@@ -69,8 +69,12 @@ class LiteLLMClient(BaseVLMClient):
         fallback_models: list[str] | None = None,
         config: VLMConfig | None = None,
     ) -> None:
+        # `primary_model` is a convenience that becomes the seed model when
+        # no explicit `config` is provided. Once we're inside the instance,
+        # `self.config.model` is the single source of truth — see Gemini
+        # finding on PR #43: an explicit `config` with a different `.model`
+        # used to win silently against the `primary_model` arg.
         super().__init__(config or VLMConfig(model=primary_model))
-        self._primary_model = primary_model
         self._fallback_models = fallback_models or []
 
         try:
@@ -85,7 +89,7 @@ class LiteLLMClient(BaseVLMClient):
         # keeps callers from having to know the LiteLLM-specific knobs.
         logger.debug(
             "LiteLLMClient initialised: primary=%s fallbacks=%s",
-            self._primary_model,
+            self.config.model,
             self._fallback_models or "(none)",
         )
 
@@ -123,9 +127,16 @@ class LiteLLMClient(BaseVLMClient):
         Wrapper around ``litellm.completion`` that maps errors and applies
         fallbacks. Returns the raw LiteLLM ``ModelResponse`` object so
         callers can decide how to extract the content.
+
+        Empty messages are caught here (rather than in every public method)
+        so the validation lives in one place and the call shape stays
+        consistent between ``complete`` and ``complete_json``.
         """
+        if not messages:
+            raise VLMError("No user messages provided.")
+
         request_kwargs: dict[str, Any] = {
-            "model": self._primary_model,
+            "model": self.config.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
@@ -149,8 +160,6 @@ class LiteLLMClient(BaseVLMClient):
 
     def complete(self, messages: list[Message]) -> str:
         """Send messages and return the text response."""
-        if not messages:
-            raise VLMError("No user messages provided.")
         response = self._call(messages, json_mode=False)
         try:
             text = response.choices[0].message.content
@@ -158,13 +167,15 @@ class LiteLLMClient(BaseVLMClient):
             raise VLMError(f"litellm_response_malformed:{type(exc).__name__}") from exc
         if not isinstance(text, str):
             raise VLMError("litellm_response_not_text")
-        logger.debug("LiteLLM response: %d chars (model=%s)", len(text), self._primary_model)
+        # Log the model that actually responded — with fallbacks active,
+        # this can differ from `self.config.model`. The response.model
+        # attribute is LiteLLM's standard way of surfacing this.
+        actual_model = getattr(response, "model", self.config.model)
+        logger.debug("LiteLLM response: %d chars (model=%s)", len(text), actual_model)
         return text
 
     def complete_json(self, messages: list[Message]) -> dict:
         """Send messages and return parsed JSON."""
-        if not messages:
-            raise VLMError("No user messages provided.")
         response = self._call(messages, json_mode=True)
         try:
             raw = response.choices[0].message.content
@@ -173,6 +184,12 @@ class LiteLLMClient(BaseVLMClient):
         if not isinstance(raw, str):
             raise VLMError("litellm_response_not_text")
         try:
-            return json.loads(raw.strip())
+            data = json.loads(raw.strip())
         except json.JSONDecodeError as parse_exc:
             raise VLMParseError(f"LiteLLM returned non-JSON response: {raw[:200]}") from parse_exc
+        # `json.loads` can return list / bool / number — the `complete_json`
+        # contract is `dict`. Reject anything else so the caller doesn't
+        # crash on `.keys()` or `["..."]` against a non-mapping.
+        if not isinstance(data, dict):
+            raise VLMParseError(f"LiteLLM returned {type(data).__name__}, expected dict")
+        return data

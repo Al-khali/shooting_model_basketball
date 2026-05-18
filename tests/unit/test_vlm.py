@@ -702,6 +702,62 @@ class TestLiteLLMClient:
         with pytest.raises(VLMParseError, match="non-JSON"):
             client.complete_json([Message(role="user", content="give json")])
 
+    def test_complete_json_rejects_non_dict_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`json.loads` happily returns lists/bools/numbers — the contract is dict."""
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.return_value = _ok_response('["not", "a", "dict"]')
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(primary_model="gemini/gemini-2.0-flash")
+        with pytest.raises(VLMParseError, match="expected dict"):
+            client.complete_json([Message(role="user", content="give json")])
+
+    def test_explicit_config_wins_over_primary_model_arg(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gemini finding on PR #43: `config.model` is the single source of truth."""
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.return_value = _ok_response("ok")
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(
+            primary_model="gemini/gemini-2.0-flash",  # convenience seed, ignored
+            config=VLMConfig(model="claude-3-5-haiku-latest"),
+        )
+        assert client.config.model == "claude-3-5-haiku-latest"
+        assert client.model_id == "claude-3-5-haiku-latest"
+
+        client.complete([Message(role="user", content="hi")])
+        assert fake.completion.call_args.kwargs["model"] == "claude-3-5-haiku-latest"
+
+    def test_log_uses_actual_response_model_for_failover_visibility(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When LiteLLM falls back, the log must report the model that responded."""
+        import logging  # noqa: PLC0415
+
+        fake = _install_fake_litellm(monkeypatch)
+        resp = _ok_response("ok")
+        # Failover scenario: primary Gemini, fallback actually replied with Claude.
+        resp.model = "claude-3-5-haiku-latest"
+        fake.completion.return_value = resp
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(
+            primary_model="gemini/gemini-2.0-flash",
+            fallback_models=["claude-3-5-haiku-latest"],
+        )
+        with caplog.at_level(logging.DEBUG, logger="src.vlm.litellm_client"):
+            client.complete([Message(role="user", content="hi")])
+
+        debug_logs = [r.getMessage() for r in caplog.records if r.levelname == "DEBUG"]
+        assert any("claude-3-5-haiku-latest" in msg for msg in debug_logs), (
+            f"expected fallback model in debug logs, got: {debug_logs}"
+        )
+
     def test_response_never_leaks_internal_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LiteLLM errors must surface as stable codes, no exception text."""
         fake = _install_fake_litellm(monkeypatch)
