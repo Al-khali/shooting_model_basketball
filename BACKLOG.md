@@ -41,7 +41,8 @@ Post-audit v1.0.0 : 7 tracks parallèles pour passer la plateforme à la prochai
 
 ### Track 3 — Security hardening *(P1 — 4-5 jours)*
 
-- [ ] **T3-1** Cosign image signing + SLSA provenance + SBOM (syft)
+- [x] **T3-1** AI Gateway POC — `LiteLLMClient` in-process avec failover optionnel (LITELLM_FALLBACK_MODELS env var). Premier step ADR-001 D3. Posture POC zero-budget : Gemini-only par défaut. 13 tests, 5 Gemini findings ACCEPTED → **livré v1.0.11 (PR #43)**. T3-1b à venir : déploiement LiteLLM Proxy sidecar quand volume justifie
+- [ ] **T3-1b** (nouveau) Cosign image signing + SLSA provenance + SBOM (syft) — initialement T3-1, renommé car T3-1 est devenu l'AI Gateway POC d'après ADR-001 D3
 - [ ] **T3-2** Rate limiting (per-API-key + per-IP) + Cloud Armor optionnel
 - [ ] **T3-3** Video input validation hardening (MIME magic byte, taille, durée, codec whitelist)
 - [ ] **T3-4** API key hashing at rest + Secret Manager rotation policy

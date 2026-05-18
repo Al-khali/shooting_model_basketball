@@ -107,7 +107,7 @@ Feuille de route AI Shoot — progression réelle par phase (sans dates figées)
 | Track 0 | Stabilisation (Trivy, deploy, error handling, VLM resilience) | P0 | 🟡 1/3 PRs |
 | Track 1 | Challenge qualif tech + ADR | P1 | ✅ 2/2 |
 | Track 2 | Reliability + observability (OTel, Firestore, idempotency, SLO) | P1 | 📋 |
-| Track 3 | Security hardening (Cosign/SLSA, rate limit, video validation, secret rotation) | P1 | 📋 |
+| Track 3 | Security hardening (Cosign/SLSA, rate limit, video validation, secret rotation) | P1 | 🟡 1/4 (T3-1 done) |
 | Track 4 | Code quality + tests (VLM, hypothesis biomech, e2e DVC, eval golden) | P2 | 📋 |
 | Track 5 | Phase 6 Edge & Mobile (ONNX, TensorRT, iOS/Android SDK, hybrid) | P2 | 📋 |
 | Track 6 | Architecture (Pub/Sub async, live streaming, DDD bounded contexts) | P3 | 📋 |

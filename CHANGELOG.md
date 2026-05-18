@@ -4,6 +4,42 @@ Toutes les modifications notables sont documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/).
 Ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [1.0.11] — Track 3 (T3-1): LiteLLMClient + AI Gateway POC (2026-05-18)
+
+Premier livrable du Track 3 (Security hardening) et **première implémentation de ADR-001 D3**. Introduction d'un `LiteLLMClient` in-process qui prépare le path vers un AI Gateway sidecar quand le volume le justifiera.
+
+### Added
+- **`src/vlm/litellm_client.py`** — nouveau `LiteLLMClient(BaseVLMClient)` (195 lignes) :
+  - Wrappe la lib `litellm` avec failover automatique optionnel (env vars `LITELLM_PRIMARY_MODEL` + `LITELLM_FALLBACK_MODELS`)
+  - Posture POC zero-budget : Gemini-only par défaut, failover opt-in
+  - Codes d'erreur stables : `litellm_call_failed:<ExcType>`, `litellm_response_malformed`, `litellm_response_not_text` (protection Bug A leak T0-5 testée)
+  - `complete_json` valide `isinstance(data, dict)` (rejette list/bool/etc.)
+  - Log avec `response.model` (modèle qui a effectivement répondu, visible quand failover) au lieu du primary configuré
+- **`pyproject.toml`** — `litellm>=1.40.0` dans `dependencies`
+- **13 tests unitaires** dans `tests/unit/test_vlm.py::TestLiteLLMClient` :
+  - 10 tests initiaux (from_env validation, complete/complete_json happy + error paths, fallback CSV parsing, leak prevention)
+  - 3 tests ajoutés suite aux Gemini findings (dict validation, config-vs-primary_model precedence, failover log visibility)
+
+### Notes Gemini Code Assist
+- 5 findings sur le PR initial — **tous ACCEPTED**, 1 HIGH + 4 MEDIUM :
+  1. **HIGH** : conflit source-of-truth `primary_model` vs `config.model` → retiré l'attribute `_primary_model`, `self.config.model` est la source unique
+  2. **MEDIUM** : utiliser `self.config.model` dans `_call` (corollaire du 1)
+  3. **MEDIUM** : log avec `getattr(response, "model", config.model)` — visibilité du failover effectif
+  4. **MEDIUM** : `json.loads` peut retourner list/bool/number, `complete_json` contract = dict → check + `VLMParseError`
+  5. **MEDIUM** : `if not messages` dupliqué dans `complete` + `complete_json` → moved dans `_call` (DRY)
+- Validation finale Gemini : *"Les nouveaux tests couvrent parfaitement les cas limites identifiés, notamment la validation du type de retour JSON et la visibilité du modèle lors des basculements. C'est une excellente base pour..."*
+
+### Pas de changement de comportement par défaut
+- `src/agents/tools/coach_tools.py` continue à utiliser `GeminiFlashClient.from_env()` — switch vers `LiteLLMClient` est une ligne mais différé jusqu'à activation du failover (qui demanderait Claude/OpenAI keys)
+- `Dockerfile`, `Terraform`, `Secret Manager` — inchangés
+- Live Cloud Run v1.0.10 tourne sans modification post-merge
+
+### ADR-001 D3 status update
+Premier step réalisé. Activation failover = configuration (env vars + secrets), plus code change.
+
+### Pipeline verification
+- ruff/format/mypy ✅, **203 tests pass** (+13 vs main : 10 initial T3-1 + 3 Gemini-driven), bandit/pip-audit ✅, `local_e2e.sh` 5/5
+
 ## [1.0.10] — Track 1 (T1-1 + T1-2): challenge qualif tech + ADR-001 (2026-05-18)
 
 Programme v2.0 — première moitié de Track 1 (challenge stratégique). Deux PRs :
