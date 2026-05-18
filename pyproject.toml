@@ -55,6 +55,11 @@ dependencies = [
   # VLM clients
   "google-generativeai>=0.7.0",
   "openai>=1.30.0",
+  # LiteLLM lib for provider-agnostic VLM calls + automatic failover.
+  # In-process for the POC (no proxy sidecar); same API as LiteLLM Proxy
+  # so migration is config-only when the proxy is justified by volume.
+  # Required by `src/vlm/litellm_client.py` (introduced in T3-1).
+  "litellm>=1.40.0",
 
   # Observability
   "structlog>=24.1.0",

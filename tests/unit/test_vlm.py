@@ -552,3 +552,170 @@ class TestGeminiClientRetry:
         client = _make_gemini_client(monkeypatch)
         opts = client._request_options()  # type: ignore[attr-defined]
         assert opts == {"timeout": client.config.timeout_seconds}  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# Tests: LiteLLMClient (T3-1, AI Gateway POC)
+#
+# All tests stub `litellm.completion` via sys.modules so the suite stays
+# fully offline. The contract under test is the BaseVLMClient mapping
+# (`complete` / `complete_json` -> stable VLMError/VLMParseError), not
+# LiteLLM internals.
+# ---------------------------------------------------------------------------
+
+
+def _install_fake_litellm(monkeypatch: pytest.MonkeyPatch) -> object:
+    """Patch sys.modules with a stub `litellm` exposing a configurable
+    `completion()` mock. Returns the mock so each test can program it."""
+    import sys
+    from unittest.mock import MagicMock
+
+    fake = MagicMock()
+    monkeypatch.setitem(sys.modules, "litellm", fake)
+    return fake
+
+
+def _ok_response(content: str) -> object:
+    """Build a duck-typed object that mimics LiteLLM's ModelResponse path:
+    response.choices[0].message.content. Avoids depending on the real type."""
+    from unittest.mock import MagicMock
+
+    resp = MagicMock()
+    resp.choices = [MagicMock()]
+    resp.choices[0].message.content = content
+    return resp
+
+
+class TestLiteLLMClient:
+    def test_from_env_requires_gemini_key_for_default_primary(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _install_fake_litellm(monkeypatch)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("LITELLM_PRIMARY_MODEL", raising=False)
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        with pytest.raises(VLMError, match="GEMINI_API_KEY"):
+            LiteLLMClient.from_env()
+
+    def test_from_env_reads_fallback_csv(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_fake_litellm(monkeypatch)
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        monkeypatch.setenv(
+            "LITELLM_FALLBACK_MODELS",
+            "claude-3-5-haiku-latest, openai/gpt-4o-mini",
+        )
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient.from_env()
+        assert client._fallback_models == [  # type: ignore[attr-defined]
+            "claude-3-5-haiku-latest",
+            "openai/gpt-4o-mini",
+        ]
+
+    def test_from_env_empty_fallback_is_no_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_fake_litellm(monkeypatch)
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        monkeypatch.delenv("LITELLM_FALLBACK_MODELS", raising=False)
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient.from_env()
+        assert client._fallback_models == []  # type: ignore[attr-defined]
+
+    def test_complete_happy_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.return_value = _ok_response("hello world")
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(primary_model="gemini/gemini-2.0-flash")
+        out = client.complete([Message(role="user", content="hi")])
+        assert out == "hello world"
+
+        # Verify the call payload — primary model, retries, timeout passed through
+        kwargs = fake.completion.call_args.kwargs
+        assert kwargs["model"] == "gemini/gemini-2.0-flash"
+        assert kwargs["num_retries"] == client.config.retry_attempts
+        assert kwargs["timeout"] == client.config.timeout_seconds
+        assert "fallbacks" not in kwargs  # none configured
+
+    def test_complete_passes_fallbacks_when_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.return_value = _ok_response("ok")
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(
+            primary_model="gemini/gemini-2.0-flash",
+            fallback_models=["claude-3-5-haiku-latest"],
+        )
+        client.complete([Message(role="user", content="hi")])
+        assert fake.completion.call_args.kwargs["fallbacks"] == ["claude-3-5-haiku-latest"]
+
+    def test_complete_wraps_litellm_error_as_vlmerror(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.side_effect = RuntimeError("upstream went away")
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(primary_model="gemini/gemini-2.0-flash")
+        with pytest.raises(VLMError, match="litellm_call_failed:RuntimeError"):
+            client.complete([Message(role="user", content="hi")])
+
+    def test_complete_empty_messages_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_fake_litellm(monkeypatch)
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(primary_model="gemini/gemini-2.0-flash")
+        with pytest.raises(VLMError, match="No user messages provided"):
+            client.complete([])
+
+    def test_complete_json_happy_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.return_value = _ok_response('{"summary": "ok"}')
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(primary_model="gemini/gemini-2.0-flash")
+        out = client.complete_json([Message(role="user", content="give json")])
+        assert out == {"summary": "ok"}
+        # JSON mode must be requested
+        assert fake.completion.call_args.kwargs["response_format"] == {"type": "json_object"}
+
+    def test_complete_json_raises_parse_error_on_invalid_json(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.return_value = _ok_response("not-json-at-all")
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(primary_model="gemini/gemini-2.0-flash")
+        with pytest.raises(VLMParseError, match="non-JSON"):
+            client.complete_json([Message(role="user", content="give json")])
+
+    def test_response_never_leaks_internal_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LiteLLM errors must surface as stable codes, no exception text."""
+        fake = _install_fake_litellm(monkeypatch)
+        fake.completion.side_effect = PermissionError("API key denied; secret=abc123")
+
+        from src.vlm.litellm_client import LiteLLMClient  # noqa: PLC0415
+
+        client = LiteLLMClient(primary_model="gemini/gemini-2.0-flash")
+        try:
+            client.complete([Message(role="user", content="hi")])
+        except VLMError as err:
+            msg = str(err)
+            assert "abc123" not in msg, "secret leaked into VLMError message"
+            assert "API key denied" not in msg, "raw exception text leaked"
+            assert "litellm_call_failed:PermissionError" in msg, "expected stable code"
+        else:
+            pytest.fail("VLMError not raised")
